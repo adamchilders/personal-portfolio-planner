@@ -62,19 +62,46 @@ class PortfolioApp {
             case 'show-dashboard':
                 this.showDashboard();
                 break;
+            case 'show-create-portfolio':
+                this.showCreatePortfolioModal();
+                break;
+            case 'view-portfolio':
+                const portfolioId = element.dataset.portfolioId;
+                this.showPortfolioDetail(portfolioId);
+                break;
+            case 'close-modal':
+                this.closeModal();
+                break;
+            case 'show-add-holding':
+                const portfolioIdForHolding = element.dataset.portfolioId;
+                this.showAddHoldingModal(portfolioIdForHolding);
+                break;
+            case 'show-add-transaction':
+                const portfolioIdForTransaction = element.dataset.portfolioId;
+                this.showAddTransactionModal(portfolioIdForTransaction);
+                break;
         }
     }
     
     async handleForm(formType, form) {
         const formData = new FormData(form);
         const data = Object.fromEntries(formData.entries());
-        
+
         switch (formType) {
             case 'login':
                 await this.login(data);
                 break;
             case 'register':
                 await this.register(data);
+                break;
+            case 'create-portfolio':
+                await this.createPortfolio(data);
+                break;
+            case 'add-holding':
+                await this.addHolding(data);
+                break;
+            case 'add-transaction':
+                await this.addTransaction(data);
                 break;
         }
     }
@@ -159,6 +186,85 @@ class PortfolioApp {
         localStorage.removeItem('auth_token');
         this.showHomepage();
     }
+
+    async createPortfolio(data) {
+        try {
+            this.showLoading('Creating portfolio...');
+
+            const response = await this.apiCall('/portfolios', {
+                method: 'POST',
+                body: JSON.stringify(data)
+            });
+
+            if (response.success) {
+                this.showSuccess('Portfolio created successfully!');
+                this.closeModal();
+                this.showDashboard(); // Refresh dashboard
+            } else {
+                this.showError(response.error || 'Failed to create portfolio');
+            }
+        } catch (error) {
+            this.showError('Failed to create portfolio. Please try again.');
+            console.error('Create portfolio error:', error);
+        }
+    }
+
+    async addHolding(data) {
+        try {
+            this.showLoading('Adding holding...');
+
+            const response = await this.apiCall(`/portfolios/${data.portfolio_id}/holdings`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    stock_symbol: data.stock_symbol.toUpperCase(),
+                    quantity: parseFloat(data.quantity),
+                    avg_cost_basis: parseFloat(data.avg_cost_basis),
+                    notes: data.notes
+                })
+            });
+
+            if (response.success) {
+                this.showSuccess('Holding added successfully!');
+                this.closeModal();
+                this.showPortfolioDetail(data.portfolio_id); // Refresh portfolio view
+            } else {
+                this.showError(response.error || 'Failed to add holding');
+            }
+        } catch (error) {
+            this.showError('Failed to add holding. Please try again.');
+            console.error('Add holding error:', error);
+        }
+    }
+
+    async addTransaction(data) {
+        try {
+            this.showLoading('Recording transaction...');
+
+            const response = await this.apiCall(`/portfolios/${data.portfolio_id}/transactions`, {
+                method: 'POST',
+                body: JSON.stringify({
+                    stock_symbol: data.stock_symbol.toUpperCase(),
+                    transaction_type: data.transaction_type,
+                    quantity: parseFloat(data.quantity),
+                    price: parseFloat(data.price),
+                    fees: parseFloat(data.fees || 0),
+                    transaction_date: data.transaction_date,
+                    notes: data.notes
+                })
+            });
+
+            if (response.success) {
+                this.showSuccess('Transaction recorded successfully!');
+                this.closeModal();
+                this.showPortfolioDetail(data.portfolio_id); // Refresh portfolio view
+            } else {
+                this.showError(response.error || 'Failed to record transaction');
+            }
+        } catch (error) {
+            this.showError('Failed to record transaction. Please try again.');
+            console.error('Add transaction error:', error);
+        }
+    }
     
     async apiCall(endpoint, options = {}) {
         const url = this.apiBase + endpoint;
@@ -199,6 +305,62 @@ class PortfolioApp {
     
     showWelcomeWalkthrough() {
         document.getElementById('app').innerHTML = this.getWelcomeWalkthroughHTML();
+    }
+
+    async showPortfolioDetail(portfolioId) {
+        try {
+            this.showLoading('Loading portfolio details...');
+
+            const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
+            document.getElementById('app').innerHTML = this.getPortfolioDetailHTML(portfolio);
+        } catch (error) {
+            this.showError('Failed to load portfolio details');
+            console.error('Portfolio detail error:', error);
+        }
+    }
+
+    showCreatePortfolioModal() {
+        this.showModal(this.getCreatePortfolioModalHTML());
+    }
+
+    showAddHoldingModal(portfolioId) {
+        this.showModal(this.getAddHoldingModalHTML(portfolioId));
+    }
+
+    showAddTransactionModal(portfolioId) {
+        this.showModal(this.getAddTransactionModalHTML(portfolioId));
+    }
+
+    showModal(content) {
+        const modal = document.createElement('div');
+        modal.id = 'modal';
+        modal.className = 'modal-overlay';
+        modal.innerHTML = content;
+        document.body.appendChild(modal);
+
+        // Add click outside to close
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) {
+                this.closeModal();
+            }
+        });
+
+        // Add escape key to close
+        document.addEventListener('keydown', this.handleEscapeKey.bind(this));
+    }
+
+    closeModal() {
+        const modal = document.getElementById('modal');
+        if (modal) {
+            modal.remove();
+        }
+        document.removeEventListener('keydown', this.handleEscapeKey.bind(this));
+    }
+
+    handleEscapeKey(e) {
+        if (e.key === 'Escape') {
+            this.closeModal();
+        }
     }
     
     showLoading(message = 'Loading...') {
@@ -492,7 +654,7 @@ class PortfolioApp {
                                 <p class="text-muted" style="margin-bottom: 0;">Welcome back, ${this.currentUser?.first_name || 'Investor'}!</p>
                             </div>
                             <div class="flex gap-4">
-                                <button class="btn btn-primary">+ New Portfolio</button>
+                                <button data-action="show-create-portfolio" class="btn btn-primary">+ New Portfolio</button>
                                 <button data-action="logout" class="btn btn-secondary">Sign Out</button>
                             </div>
                         </div>
@@ -517,7 +679,7 @@ class PortfolioApp {
                 </div>
                 <h3>No Portfolios Yet</h3>
                 <p class="text-muted mb-8">Create your first portfolio to start tracking your investments.</p>
-                <button class="btn btn-primary btn-lg">Create Your First Portfolio</button>
+                <button data-action="show-create-portfolio" class="btn btn-primary btn-lg">Create Your First Portfolio</button>
             </div>
         `;
     }
@@ -547,7 +709,7 @@ class PortfolioApp {
                             </div>
                         </div>
 
-                        <button class="btn btn-secondary" style="width: 100%;">View Details</button>
+                        <button data-action="view-portfolio" data-portfolio-id="${portfolio.id}" class="btn btn-secondary" style="width: 100%;">View Details</button>
                     </div>
                 `).join('')}
             </div>
@@ -559,6 +721,330 @@ class PortfolioApp {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
         }).format(num);
+    }
+
+    getCreatePortfolioModalHTML() {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 500px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Create New Portfolio</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <form data-form="create-portfolio">
+                        <div class="form-group">
+                            <label class="form-label" for="name">Portfolio Name</label>
+                            <input type="text" id="name" name="name" class="form-input" placeholder="e.g., Retirement Portfolio" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="description">Description (Optional)</label>
+                            <textarea id="description" name="description" class="form-input" rows="3" placeholder="Brief description of this portfolio's purpose"></textarea>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="portfolio_type">Portfolio Type</label>
+                                <select id="portfolio_type" name="portfolio_type" class="form-input" required>
+                                    <option value="personal">Personal</option>
+                                    <option value="retirement">Retirement</option>
+                                    <option value="trading">Trading</option>
+                                    <option value="savings">Savings</option>
+                                    <option value="other">Other</option>
+                                </select>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="currency">Currency</label>
+                                <select id="currency" name="currency" class="form-input" required>
+                                    <option value="USD">USD - US Dollar</option>
+                                    <option value="EUR">EUR - Euro</option>
+                                    <option value="GBP">GBP - British Pound</option>
+                                    <option value="CAD">CAD - Canadian Dollar</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label">
+                                <input type="checkbox" name="is_public" value="1" style="margin-right: var(--space-2);">
+                                Make this portfolio public (visible to others)
+                            </label>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Create Portfolio</button>
+                            <button type="button" data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    getAddHoldingModalHTML(portfolioId) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 500px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Add Stock Holding</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <form data-form="add-holding">
+                        <input type="hidden" name="portfolio_id" value="${portfolioId}">
+
+                        <div class="form-group">
+                            <label class="form-label" for="stock_symbol">Stock Symbol</label>
+                            <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="e.g., AAPL" style="text-transform: uppercase;" required>
+                            <small class="text-muted">Enter the stock ticker symbol (e.g., AAPL for Apple Inc.)</small>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="quantity">Quantity</label>
+                                <input type="number" id="quantity" name="quantity" class="form-input" step="0.000001" min="0" placeholder="10" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="avg_cost_basis">Average Cost per Share</label>
+                                <input type="number" id="avg_cost_basis" name="avg_cost_basis" class="form-input" step="0.01" min="0" placeholder="150.00" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="notes">Notes (Optional)</label>
+                            <textarea id="notes" name="notes" class="form-input" rows="2" placeholder="Any additional notes about this holding"></textarea>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Add Holding</button>
+                            <button type="button" data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    getAddTransactionModalHTML(portfolioId) {
+        const today = new Date().toISOString().split('T')[0];
+
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 500px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Record Transaction</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <form data-form="add-transaction">
+                        <input type="hidden" name="portfolio_id" value="${portfolioId}">
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="stock_symbol">Stock Symbol</label>
+                                <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="e.g., AAPL" style="text-transform: uppercase;" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="transaction_type">Transaction Type</label>
+                                <select id="transaction_type" name="transaction_type" class="form-input" required>
+                                    <option value="buy">Buy</option>
+                                    <option value="sell">Sell</option>
+                                    <option value="dividend">Dividend</option>
+                                    <option value="transfer_in">Transfer In</option>
+                                    <option value="transfer_out">Transfer Out</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="quantity">Quantity</label>
+                                <input type="number" id="quantity" name="quantity" class="form-input" step="0.000001" min="0" placeholder="10" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="price">Price per Share</label>
+                                <input type="number" id="price" name="price" class="form-input" step="0.01" min="0" placeholder="150.00" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="fees">Fees</label>
+                                <input type="number" id="fees" name="fees" class="form-input" step="0.01" min="0" placeholder="0.00" value="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="transaction_date">Transaction Date</label>
+                            <input type="date" id="transaction_date" name="transaction_date" class="form-input" value="${today}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="notes">Notes (Optional)</label>
+                            <textarea id="notes" name="notes" class="form-input" rows="2" placeholder="Any additional notes about this transaction"></textarea>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Record Transaction</button>
+                            <button type="button" data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    getPortfolioDetailHTML(portfolioData) {
+        const portfolio = portfolioData.portfolio;
+        const performance = portfolioData.performance;
+        const holdings = portfolioData.holdings || [];
+
+        return `
+            <div class="portfolio-detail">
+                <!-- Header -->
+                <header style="background: white; border-bottom: 1px solid var(--gray-200); padding: var(--space-4) 0;">
+                    <div class="container">
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <div class="flex items-center gap-4 mb-2">
+                                    <button data-action="show-dashboard" class="btn btn-secondary" style="padding: 0.5rem;">← Back</button>
+                                    <h2 style="margin-bottom: 0;">${portfolio.name}</h2>
+                                    <span class="text-muted" style="font-size: var(--font-size-sm); text-transform: capitalize;">${portfolio.type}</span>
+                                </div>
+                                <p class="text-muted" style="margin-bottom: 0;">${holdings.length} holdings • ${portfolio.currency}</p>
+                            </div>
+                            <div class="flex gap-4">
+                                <button data-action="show-add-holding" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Holding</button>
+                                <button data-action="show-add-transaction" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">+ Add Transaction</button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- Performance Summary -->
+                <section class="py-8" style="background: white;">
+                    <div class="container">
+                        <div class="grid grid-cols-4 gap-6">
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-3xl); font-weight: 600; margin-bottom: var(--space-2);">
+                                    $${this.formatNumber(performance.total_value)}
+                                </div>
+                                <div class="text-muted">Total Value</div>
+                            </div>
+
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-3xl); font-weight: 600; margin-bottom: var(--space-2);">
+                                    $${this.formatNumber(performance.total_cost_basis)}
+                                </div>
+                                <div class="text-muted">Cost Basis</div>
+                            </div>
+
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-3xl); font-weight: 600; margin-bottom: var(--space-2); color: ${performance.total_gain_loss >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
+                                    ${performance.total_gain_loss >= 0 ? '+' : ''}$${this.formatNumber(performance.total_gain_loss)}
+                                </div>
+                                <div class="text-muted">Total Gain/Loss</div>
+                            </div>
+
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-3xl); font-weight: 600; margin-bottom: var(--space-2); color: ${performance.total_gain_loss_percent >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
+                                    ${performance.total_gain_loss_percent >= 0 ? '+' : ''}${performance.total_gain_loss_percent.toFixed(2)}%
+                                </div>
+                                <div class="text-muted">Return</div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- Holdings Table -->
+                <section class="py-8">
+                    <div class="container">
+                        <div class="card">
+                            <div class="flex justify-between items-center mb-6">
+                                <h3 style="margin-bottom: 0;">Holdings</h3>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">
+                                    ${holdings.length} holdings
+                                </div>
+                            </div>
+
+                            ${holdings.length === 0 ? this.getEmptyHoldingsHTML(portfolio.id) : this.getHoldingsTableHTML(holdings)}
+                        </div>
+                    </div>
+                </section>
+            </div>
+        `;
+    }
+
+    getEmptyHoldingsHTML(portfolioId) {
+        return `
+            <div class="text-center py-12">
+                <div style="width: 48px; height: 48px; background: var(--gray-100); border-radius: var(--radius-full); margin: 0 auto var(--space-4); display: flex; align-items: center; justify-content: center;">
+                    <span style="color: var(--gray-400); font-size: 1.5rem;">📊</span>
+                </div>
+                <h4>No Holdings Yet</h4>
+                <p class="text-muted mb-6">Add your first stock holding to start tracking this portfolio.</p>
+                <button data-action="show-add-holding" data-portfolio-id="${portfolioId}" class="btn btn-primary">Add Your First Holding</button>
+            </div>
+        `;
+    }
+
+    getHoldingsTableHTML(holdings) {
+        return `
+            <div style="overflow-x: auto;">
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--gray-200);">
+                            <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Symbol</th>
+                            <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Name</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Shares</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Avg Cost</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Current Price</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Market Value</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Gain/Loss</th>
+                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Weight</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${holdings.map(holding => `
+                            <tr style="border-bottom: 1px solid var(--gray-100);">
+                                <td style="padding: var(--space-4) var(--space-3);">
+                                    <div style="font-weight: 600; color: var(--gray-900);">${holding.symbol}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3);">
+                                    <div style="color: var(--gray-700);">${holding.name || holding.symbol}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div>${this.formatNumber(holding.quantity)}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div>$${this.formatNumber(holding.avg_cost_basis)}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div>$${this.formatNumber(holding.current_price)}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div style="font-weight: 600;">$${this.formatNumber(holding.current_value)}</div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div style="color: ${holding.gain_loss >= 0 ? 'var(--success-green)' : 'var(--danger-red)'}; font-weight: 500;">
+                                        ${holding.gain_loss >= 0 ? '+' : ''}$${this.formatNumber(holding.gain_loss)}
+                                    </div>
+                                    <div style="font-size: var(--font-size-sm); color: ${holding.gain_loss_percent >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
+                                        ${holding.gain_loss_percent >= 0 ? '+' : ''}${holding.gain_loss_percent.toFixed(2)}%
+                                    </div>
+                                </td>
+                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                    <div>${holding.weight.toFixed(1)}%</div>
+                                </td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            </div>
+        `;
     }
 }
 
