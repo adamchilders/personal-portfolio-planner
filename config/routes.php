@@ -6,6 +6,7 @@ use Slim\App;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Controllers\AuthController;
+use App\Controllers\PortfolioController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\AdminMiddleware;
 
@@ -67,6 +68,19 @@ $app->group('/auth', function ($group) {
     $group->get('/me', [AuthController::class, 'me'])->add(AuthMiddleware::class);
 });
 
+// Portfolio routes (protected)
+$app->group('/api/portfolios', function ($group) {
+    $group->get('', [PortfolioController::class, 'index']);
+    $group->post('', [PortfolioController::class, 'create']);
+    $group->get('/{id:[0-9]+}', [PortfolioController::class, 'show']);
+    $group->put('/{id:[0-9]+}', [PortfolioController::class, 'update']);
+    $group->delete('/{id:[0-9]+}', [PortfolioController::class, 'delete']);
+
+    // Portfolio holdings and transactions
+    $group->post('/{id:[0-9]+}/holdings', [PortfolioController::class, 'addHolding']);
+    $group->post('/{id:[0-9]+}/transactions', [PortfolioController::class, 'addTransaction']);
+})->add(AuthMiddleware::class);
+
 // Welcome page
 $app->get('/', function (Request $request, Response $response) {
     $data = [
@@ -104,16 +118,27 @@ $app->group('/api', function ($group) {
         return $response->withHeader('Content-Type', 'application/json');
     });
 
-    // Placeholder for future API endpoints
-    $group->get('/portfolios', function (Request $request, Response $response) {
+    // API documentation endpoint
+    $group->get('/docs', function (Request $request, Response $response) {
         $data = [
-            'message' => 'Portfolio API endpoint - Coming soon!',
+            'api_version' => '1.0.0',
+            'documentation' => 'Portfolio Tracker API',
             'endpoints' => [
-                'GET /api/portfolios' => 'List all portfolios',
-                'POST /api/portfolios' => 'Create new portfolio',
-                'GET /api/portfolios/{id}' => 'Get portfolio details',
-                'PUT /api/portfolios/{id}' => 'Update portfolio',
-                'DELETE /api/portfolios/{id}' => 'Delete portfolio'
+                'Authentication' => [
+                    'POST /auth/login' => 'User login',
+                    'POST /auth/register' => 'User registration',
+                    'POST /auth/logout' => 'User logout',
+                    'GET /auth/me' => 'Get current user info'
+                ],
+                'Portfolios' => [
+                    'GET /api/portfolios' => 'List all portfolios',
+                    'POST /api/portfolios' => 'Create new portfolio',
+                    'GET /api/portfolios/{id}' => 'Get portfolio details',
+                    'PUT /api/portfolios/{id}' => 'Update portfolio',
+                    'DELETE /api/portfolios/{id}' => 'Delete portfolio',
+                    'POST /api/portfolios/{id}/holdings' => 'Add holding to portfolio',
+                    'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio'
+                ]
             ]
         ];
 

@@ -9,7 +9,9 @@ use Predis\Client as RedisClient;
 use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Services\AuthService;
 use App\Services\UserService;
+use App\Services\PortfolioService;
 use App\Controllers\AuthController;
+use App\Controllers\PortfolioController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\AdminMiddleware;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -125,9 +127,17 @@ $container->set(AuthService::class, function ($container) {
     return new AuthService($container->get(UserService::class));
 });
 
+$container->set(PortfolioService::class, function () {
+    return new PortfolioService();
+});
+
 // Controllers
 $container->set(AuthController::class, function ($container) {
     return new AuthController($container->get(AuthService::class));
+});
+
+$container->set(PortfolioController::class, function ($container) {
+    return new PortfolioController($container->get(PortfolioService::class));
 });
 
 // Middleware
