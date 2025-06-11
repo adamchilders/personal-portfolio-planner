@@ -7,6 +7,12 @@ use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 use Predis\Client as RedisClient;
 use Illuminate\Database\Capsule\Manager as Capsule;
+use App\Services\AuthService;
+use App\Services\UserService;
+use App\Controllers\AuthController;
+use App\Middleware\AuthMiddleware;
+use App\Middleware\AdminMiddleware;
+use Slim\Psr7\Factory\ResponseFactory;
 
 /** @var Container $container */
 
@@ -81,6 +87,37 @@ $container->set('view', function () {
     $twig->getEnvironment()->addGlobal('app_env', $_ENV['APP_ENV'] ?? 'production');
     
     return $twig;
+});
+
+// Response Factory
+$container->set(ResponseFactory::class, function () {
+    return new ResponseFactory();
+});
+
+// Services
+$container->set(UserService::class, function () {
+    return new UserService();
+});
+
+$container->set(AuthService::class, function ($container) {
+    return new AuthService($container->get(UserService::class));
+});
+
+// Controllers
+$container->set(AuthController::class, function ($container) {
+    return new AuthController($container->get(AuthService::class));
+});
+
+// Middleware
+$container->set(AuthMiddleware::class, function ($container) {
+    return new AuthMiddleware(
+        $container->get(AuthService::class),
+        $container->get(ResponseFactory::class)
+    );
+});
+
+$container->set(AdminMiddleware::class, function ($container) {
+    return new AdminMiddleware($container->get(ResponseFactory::class));
 });
 
 return $container;

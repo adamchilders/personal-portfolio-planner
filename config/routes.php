@@ -5,6 +5,9 @@ declare(strict_types=1);
 use Slim\App;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use App\Controllers\AuthController;
+use App\Middleware\AuthMiddleware;
+use App\Middleware\AdminMiddleware;
 
 /** @var App $app */
 
@@ -50,6 +53,18 @@ $app->get('/health', function (Request $request, Response $response) {
 $app->get('/ping', function (Request $request, Response $response) {
     $response->getBody()->write('pong');
     return $response->withHeader('Content-Type', 'text/plain');
+});
+
+// Authentication routes
+$app->group('/auth', function ($group) {
+    $group->post('/login', [AuthController::class, 'login']);
+    $group->post('/register', [AuthController::class, 'register']);
+    $group->post('/logout', [AuthController::class, 'logout']);
+    $group->get('/status', [AuthController::class, 'status']);
+    $group->get('/has-users', [AuthController::class, 'hasUsers']);
+
+    // Protected auth routes
+    $group->get('/me', [AuthController::class, 'me'])->add(AuthMiddleware::class);
 });
 
 // Welcome page
