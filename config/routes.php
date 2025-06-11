@@ -91,26 +91,40 @@ $app->group('/api/stocks', function ($group) {
     $group->post('/quotes', [StockController::class, 'multipleQuotes']);
 })->add(AuthMiddleware::class);
 
-// Welcome page
+// Frontend routes - serve the main application
 $app->get('/', function (Request $request, Response $response) {
-    $data = [
-        'title' => 'Personal Portfolio Tracker',
-        'message' => 'Welcome to your Portfolio Tracking Application!',
-        'version' => '1.0.0',
-        'environment' => $_ENV['APP_ENV'] ?? 'production',
-        'features' => [
-            'Multi-portfolio support',
-            'Real-time stock data',
-            'Smart API integration',
-            'Background data processing',
-            'Secure authentication',
-            'Admin interface'
-        ]
-    ];
-    
-    // For now, return JSON. Later we'll use Twig templates
-    $response->getBody()->write(json_encode($data, JSON_PRETTY_PRINT));
-    return $response->withHeader('Content-Type', 'application/json');
+    $html = file_get_contents(ROOT_PATH . '/templates/index.html');
+    $response->getBody()->write($html);
+    return $response->withHeader('Content-Type', 'text/html');
+});
+
+// Serve static assets
+$app->get('/assets/{type}/{file}', function (Request $request, Response $response, array $args) {
+    $type = $args['type'];
+    $file = $args['file'];
+
+    // Security check - only allow specific file types and prevent directory traversal
+    $allowedTypes = ['css', 'js', 'images'];
+    if (!in_array($type, $allowedTypes) || strpos($file, '..') !== false) {
+        return $response->withStatus(404);
+    }
+
+    $filePath = ROOT_PATH . "/public/assets/{$type}/{$file}";
+
+    if (!file_exists($filePath)) {
+        return $response->withStatus(404);
+    }
+
+    // Set appropriate content type
+    $contentType = match($type) {
+        'css' => 'text/css',
+        'js' => 'application/javascript',
+        'images' => mime_content_type($filePath) ?: 'application/octet-stream',
+        default => 'application/octet-stream'
+    };
+
+    $response->getBody()->write(file_get_contents($filePath));
+    return $response->withHeader('Content-Type', $contentType);
 });
 
 // API routes group
