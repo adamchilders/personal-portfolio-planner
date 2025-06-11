@@ -82,7 +82,7 @@ class MigrationRunner
     
     private function getMigrationFiles(): array
     {
-        $files = glob($this->migrationsPath . '/*.sql');
+        $files = glob("{$this->migrationsPath}/*.sql");
         return array_map('basename', $files);
     }
     
@@ -96,37 +96,47 @@ class MigrationRunner
     private function executeMigration(string $migration): void
     {
         echo "⚡ Executing migration: {$migration}\n";
-        
-        $migrationPath = $this->migrationsPath . '/' . $migration;
+
+        $migrationPath = "{$this->migrationsPath}/{$migration}";
         $sql = file_get_contents($migrationPath);
-        
+
         try {
+            // Clean up the SQL content
+            $sql = preg_replace('/--.*$/m', '', $sql); // Remove comments
+            $sql = preg_replace('/\/\*.*?\*\//s', '', $sql); // Remove block comments
+            $sql = trim($sql);
+
             // Split SQL file by semicolons and execute each statement
             $statements = array_filter(
-                array_map('trim', explode(';', $sql)),
-                fn($stmt) => !empty($stmt) && !str_starts_with($stmt, '--')
+                array_map('trim', preg_split('/;(?=(?:[^\']*\'[^\']*\')*[^\']*$)/', $sql)),
+                fn($stmt) => !empty($stmt)
             );
-            
-            $this->db->beginTransaction();
-            
+
+            // Execute each statement individually (DDL statements can't be in transactions)
             foreach ($statements as $statement) {
                 if (!empty($statement)) {
+                    echo "   📝 Executing: " . substr($statement, 0, 50) . "...\n";
                     $this->db->statement($statement);
                 }
             }
-            
-            // Record migration as executed
+
+            // Record migration as executed (this can be in a transaction)
+            $this->db->beginTransaction();
             $this->db->table('migrations')->insert([
                 'migration' => $migration,
                 'executed_at' => date('Y-m-d H:i:s')
             ]);
-            
             $this->db->commit();
+
             echo "   ✅ Migration {$migration} completed successfully\n";
-            
+
         } catch (Exception $e) {
-            $this->db->rollBack();
+            // Only rollback if we have an active transaction
+            if ($this->db->transactionLevel() > 0) {
+                $this->db->rollBack();
+            }
             echo "   ❌ Migration {$migration} failed: " . $e->getMessage() . "\n";
+            echo "   📄 SQL that failed: " . substr($statement ?? 'unknown', 0, 200) . "\n";
             exit(1);
         }
     }

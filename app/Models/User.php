@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Helpers\DateTimeHelper;
 
 class User extends Model
 {
@@ -84,7 +85,7 @@ class User extends Model
     
     public function getFullNameAttribute(): string
     {
-        return trim($this->first_name . ' ' . $this->last_name);
+        return trim("{$this->first_name} {$this->last_name}");
     }
     
     public function getDisplayNameAttribute(): string
@@ -105,7 +106,7 @@ class User extends Model
     
     public function updateLastLogin(): void
     {
-        $this->last_login = new \DateTime();
+        $this->last_login = DateTimeHelper::now();
         $this->save();
     }
     

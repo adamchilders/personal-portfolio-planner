@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Helpers\DateTimeHelper;
 
 class PasswordResetToken extends Model
 {
@@ -33,7 +34,7 @@ class PasswordResetToken extends Model
     // Helper methods
     public function isExpired(): bool
     {
-        return $this->expires_at->isPast();
+        return $this->expires_at < DateTimeHelper::now();
     }
     
     public function isUsed(): bool
@@ -48,7 +49,7 @@ class PasswordResetToken extends Model
     
     public function markAsUsed(): void
     {
-        $this->used_at = now();
+        $this->used_at = DateTimeHelper::now();
         $this->save();
     }
 }

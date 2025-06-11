@@ -209,7 +209,7 @@ class AuthController
     private function getClientIp(Request $request): string
     {
         $serverParams = $request->getServerParams();
-        
+
         // Check for IP from various headers
         $headers = [
             'HTTP_X_FORWARDED_FOR',
@@ -217,16 +217,16 @@ class AuthController
             'HTTP_CLIENT_IP',
             'REMOTE_ADDR'
         ];
-        
+
         foreach ($headers as $header) {
             if (!empty($serverParams[$header])) {
-                $ip = trim(explode(',', $serverParams[$header])[0]);
+                $ip = trim(explode(',', (string)$serverParams[$header])[0]);
                 if (filter_var($ip, FILTER_VALIDATE_IP, FILTER_FLAG_NO_PRIV_RANGE | FILTER_FLAG_NO_RES_RANGE)) {
                     return $ip;
                 }
             }
         }
-        
+
         return $serverParams['REMOTE_ADDR'] ?? 'unknown';
     }
     

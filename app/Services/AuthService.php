@@ -10,8 +10,8 @@ use Exception;
 
 class AuthService
 {
-    private const SESSION_COOKIE_NAME = 'portfolio_session';
-    private const SESSION_LIFETIME_MINUTES = 120;
+    private const string SESSION_COOKIE_NAME = 'portfolio_session';
+    private const int SESSION_LIFETIME_MINUTES = 120;
     
     public function __construct(
         private UserService $userService
@@ -35,7 +35,7 @@ class AuthService
     /**
      * Create a new session for the user
      */
-    public function createSession(User $user, string $ipAddress = null, string $userAgent = null): UserSession
+    public function createSession(User $user, ?string $ipAddress = null, ?string $userAgent = null): UserSession
     {
         // Clean up old sessions for this user
         $this->cleanupUserSessions($user);
@@ -46,7 +46,7 @@ class AuthService
     /**
      * Login user and create session
      */
-    public function login(string $identifier, string $password, string $ipAddress = null, string $userAgent = null): array
+    public function login(string $identifier, string $password, ?string $ipAddress = null, ?string $userAgent = null): array
     {
         $user = $this->authenticate($identifier, $password);
         
@@ -111,7 +111,7 @@ class AuthService
     /**
      * Extend session expiration
      */
-    public function extendSession(string $sessionToken, int $minutes = null): bool
+    public function extendSession(string $sessionToken, ?int $minutes = null): bool
     {
         $session = UserSession::findByToken($sessionToken);
         
@@ -174,9 +174,10 @@ class AuthService
     {
         $sessions = $user->sessions()
             ->orderBy('created_at', 'desc')
-            ->skip(5)
+            ->offset(5)
+            ->limit(100) // Add limit to make offset work in MySQL
             ->get();
-            
+
         foreach ($sessions as $session) {
             $session->delete();
         }
@@ -190,7 +191,7 @@ class AuthService
         return [
             'name' => self::SESSION_COOKIE_NAME,
             'value' => $sessionToken,
-            'expires' => time() + (self::SESSION_LIFETIME_MINUTES * 60),
+            'expires' => time() + self::SESSION_LIFETIME_MINUTES * 60,
             'path' => '/',
             'secure' => $_ENV['APP_ENV'] === 'production',
             'httponly' => true,

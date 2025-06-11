@@ -38,6 +38,28 @@ $container->set('database', function () {
     return $capsule;
 });
 
+// Database configuration
+$container->set('database', function () {
+    $capsule = new Capsule;
+
+    $capsule->addConnection([
+        'driver' => $_ENV['DB_CONNECTION'] ?? 'mysql',
+        'host' => $_ENV['DB_HOST'] ?? 'mysql',
+        'port' => $_ENV['DB_PORT'] ?? '3306',
+        'database' => $_ENV['DB_DATABASE'] ?? 'portfolio_tracker',
+        'username' => $_ENV['DB_USERNAME'] ?? 'portfolio_user',
+        'password' => $_ENV['DB_PASSWORD'] ?? 'password',
+        'charset' => 'utf8mb4',
+        'collation' => 'utf8mb4_unicode_ci',
+        'prefix' => '',
+    ]);
+
+    $capsule->setAsGlobal();
+    $capsule->bootEloquent();
+
+    return $capsule;
+});
+
 // Redis configuration
 $container->set('redis', function () {
     return new RedisClient([
@@ -118,6 +140,15 @@ $container->set(AuthMiddleware::class, function ($container) {
 
 $container->set(AdminMiddleware::class, function ($container) {
     return new AdminMiddleware($container->get(ResponseFactory::class));
+});
+
+// Middleware aliases for Slim
+$container->set('AuthMiddleware', function ($container) {
+    return $container->get(AuthMiddleware::class);
+});
+
+$container->set('AdminMiddleware', function ($container) {
+    return $container->get(AdminMiddleware::class);
 });
 
 return $container;

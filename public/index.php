@@ -40,6 +40,9 @@ $app->addBodyParsingMiddleware();
 // Configure container
 require ROOT_PATH . '/config/container.php';
 
+// Initialize database connection
+$container->get('database');
+
 // Load routes
 require ROOT_PATH . '/config/routes.php';
 

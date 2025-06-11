@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Helpers\DateTimeHelper;
 
 class UserActivity extends Model
 {
@@ -34,7 +35,7 @@ class UserActivity extends Model
     }
     
     // Static methods for logging activities
-    public static function log(int $userId, string $action, string $resourceType = null, int $resourceId = null, array $details = [], string $ipAddress = null, string $userAgent = null): self
+    public static function log(int $userId, string $action, ?string $resourceType = null, ?int $resourceId = null, array $details = [], ?string $ipAddress = null, ?string $userAgent = null): self
     {
         return self::create([
             'user_id' => $userId,
@@ -44,7 +45,7 @@ class UserActivity extends Model
             'details' => $details,
             'ip_address' => $ipAddress,
             'user_agent' => $userAgent,
-            'created_at' => now()
+            'created_at' => DateTimeHelper::now()
         ]);
     }
 }

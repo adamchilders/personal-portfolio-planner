@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Helpers\DateTimeHelper;
 
 class EmailVerificationToken extends Model
 {
@@ -33,7 +34,7 @@ class EmailVerificationToken extends Model
     // Helper methods
     public function isExpired(): bool
     {
-        return $this->expires_at->isPast();
+        return $this->expires_at < DateTimeHelper::now();
     }
     
     public function isVerified(): bool
@@ -48,7 +49,7 @@ class EmailVerificationToken extends Model
     
     public function markAsVerified(): void
     {
-        $this->verified_at = now();
+        $this->verified_at = DateTimeHelper::now();
         $this->save();
     }
 }
