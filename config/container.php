@@ -10,8 +10,10 @@ use Illuminate\Database\Capsule\Manager as Capsule;
 use App\Services\AuthService;
 use App\Services\UserService;
 use App\Services\PortfolioService;
+use App\Services\StockDataService;
 use App\Controllers\AuthController;
 use App\Controllers\PortfolioController;
+use App\Controllers\StockController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\AdminMiddleware;
 use Slim\Psr7\Factory\ResponseFactory;
@@ -127,8 +129,12 @@ $container->set(AuthService::class, function ($container) {
     return new AuthService($container->get(UserService::class));
 });
 
-$container->set(PortfolioService::class, function () {
-    return new PortfolioService();
+$container->set(StockDataService::class, function () {
+    return new StockDataService();
+});
+
+$container->set(PortfolioService::class, function ($container) {
+    return new PortfolioService($container->get(StockDataService::class));
 });
 
 // Controllers
@@ -138,6 +144,10 @@ $container->set(AuthController::class, function ($container) {
 
 $container->set(PortfolioController::class, function ($container) {
     return new PortfolioController($container->get(PortfolioService::class));
+});
+
+$container->set(StockController::class, function ($container) {
+    return new StockController($container->get(StockDataService::class));
 });
 
 // Middleware

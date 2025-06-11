@@ -83,11 +83,11 @@ class PortfolioHolding extends Model
     public function updateFromTransaction(Transaction $transaction): void
     {
         if ($transaction->transaction_type === 'buy') {
-            $this->addShares($transaction->quantity, $transaction->price);
+            $this->addShares((float)$transaction->quantity, (float)$transaction->price);
         } elseif ($transaction->transaction_type === 'sell') {
-            $this->removeShares($transaction->quantity);
+            $this->removeShares((float)$transaction->quantity);
         }
-        
+
         $this->last_transaction_date = $transaction->transaction_date;
         $this->save();
     }

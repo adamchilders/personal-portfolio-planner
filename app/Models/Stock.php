@@ -7,6 +7,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Helpers\DateTimeHelper;
 
 class Stock extends Model
 {
@@ -14,6 +15,9 @@ class Stock extends Model
     protected $primaryKey = 'symbol';
     protected $keyType = 'string';
     public $incrementing = false;
+
+    // Use last_updated instead of updated_at
+    const UPDATED_AT = 'last_updated';
     
     protected $fillable = [
         'symbol',
@@ -89,23 +93,23 @@ class Stock extends Model
     public function getLatestPrice(int $days = 1): ?StockPrice
     {
         return $this->prices()
-            ->where('price_date', '>=', now()->subDays($days))
+            ->where('price_date', '>=', DateTimeHelper::now()->modify("-{$days} days"))
             ->orderBy('price_date', 'desc')
             ->first();
     }
-    
+
     public function getPriceHistory(int $days = 30): \Illuminate\Database\Eloquent\Collection
     {
         return $this->prices()
-            ->where('price_date', '>=', now()->subDays($days))
+            ->where('price_date', '>=', DateTimeHelper::now()->modify("-{$days} days"))
             ->orderBy('price_date', 'asc')
             ->get();
     }
-    
+
     public function getRecentDividends(int $months = 12): \Illuminate\Database\Eloquent\Collection
     {
         return $this->dividends()
-            ->where('ex_date', '>=', now()->subMonths($months))
+            ->where('ex_date', '>=', DateTimeHelper::now()->modify("-{$months} months"))
             ->orderBy('ex_date', 'desc')
             ->get();
     }
@@ -118,7 +122,7 @@ class Stock extends Model
         }
         
         $annualDividends = $this->dividends()
-            ->where('ex_date', '>=', now()->subYear())
+            ->where('ex_date', '>=', DateTimeHelper::now()->modify('-1 year'))
             ->where('dividend_type', 'regular')
             ->sum('amount');
             

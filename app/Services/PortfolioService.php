@@ -8,11 +8,15 @@ use App\Models\Portfolio;
 use App\Models\PortfolioHolding;
 use App\Models\Transaction;
 use App\Models\User;
+use App\Services\StockDataService;
 use Exception;
 use Illuminate\Database\Eloquent\Collection;
 
 class PortfolioService
 {
+    public function __construct(
+        private StockDataService $stockDataService
+    ) {}
     /**
      * Create a new portfolio for a user
      */
@@ -96,19 +100,25 @@ class PortfolioService
     public function addHolding(Portfolio $portfolio, array $holdingData): PortfolioHolding
     {
         $this->validateHoldingData($holdingData);
-        
+
+        // Ensure the stock exists in our database
+        $stock = $this->stockDataService->getOrCreateStock($holdingData['stock_symbol']);
+        if (!$stock) {
+            throw new Exception('Invalid stock symbol or unable to fetch stock data');
+        }
+
         // Check if holding already exists
         $existingHolding = $portfolio->holdings()
             ->where('stock_symbol', $holdingData['stock_symbol'])
             ->first();
-            
+
         if ($existingHolding) {
             throw new Exception('Stock already exists in portfolio');
         }
-        
+
         $holdingData['portfolio_id'] = $portfolio->id;
         $holdingData['is_active'] = true;
-        
+
         return PortfolioHolding::create($holdingData);
     }
     
@@ -139,14 +149,20 @@ class PortfolioService
     public function addTransaction(Portfolio $portfolio, array $transactionData): Transaction
     {
         $this->validateTransactionData($transactionData);
-        
+
+        // Ensure the stock exists in our database
+        $stock = $this->stockDataService->getOrCreateStock($transactionData['stock_symbol']);
+        if (!$stock) {
+            throw new Exception('Invalid stock symbol or unable to fetch stock data');
+        }
+
         $transactionData['portfolio_id'] = $portfolio->id;
-        
+
         $transaction = Transaction::create($transactionData);
-        
+
         // Update the corresponding holding
         $transaction->updateHolding();
-        
+
         return $transaction;
     }
     

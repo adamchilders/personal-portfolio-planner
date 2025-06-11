@@ -7,6 +7,7 @@ use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 use App\Controllers\AuthController;
 use App\Controllers\PortfolioController;
+use App\Controllers\StockController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\AdminMiddleware;
 
@@ -81,6 +82,15 @@ $app->group('/api/portfolios', function ($group) {
     $group->post('/{id:[0-9]+}/transactions', [PortfolioController::class, 'addTransaction']);
 })->add(AuthMiddleware::class);
 
+// Stock routes (protected)
+$app->group('/api/stocks', function ($group) {
+    $group->get('/search', [StockController::class, 'search']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/quote', [StockController::class, 'quote']);
+    $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
+    $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
+    $group->post('/quotes', [StockController::class, 'multipleQuotes']);
+})->add(AuthMiddleware::class);
+
 // Welcome page
 $app->get('/', function (Request $request, Response $response) {
     $data = [
@@ -138,6 +148,13 @@ $app->group('/api', function ($group) {
                     'DELETE /api/portfolios/{id}' => 'Delete portfolio',
                     'POST /api/portfolios/{id}/holdings' => 'Add holding to portfolio',
                     'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio'
+                ],
+                'Stocks' => [
+                    'GET /api/stocks/search?q={query}' => 'Search for stocks',
+                    'GET /api/stocks/{symbol}/quote' => 'Get current stock quote',
+                    'GET /api/stocks/{symbol}' => 'Get stock information',
+                    'POST /api/stocks/{symbol}/update-quote' => 'Update stock quote',
+                    'POST /api/stocks/quotes' => 'Get multiple stock quotes'
                 ]
             ]
         ];

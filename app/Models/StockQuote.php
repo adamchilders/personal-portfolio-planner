@@ -6,6 +6,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Helpers\DateTimeHelper;
 
 class StockQuote extends Model
 {
@@ -132,18 +133,18 @@ class StockQuote extends Model
     
     public function isStale(int $minutes = 15): bool
     {
-        return $this->quote_time->diffInMinutes(now()) > $minutes;
+        return $this->quote_time->diffInMinutes(DateTimeHelper::now()) > $minutes;
     }
-    
+
     // Scopes
     public function scopeRecent($query, int $minutes = 15)
     {
-        return $query->where('quote_time', '>=', now()->subMinutes($minutes));
+        return $query->where('quote_time', '>=', DateTimeHelper::now()->modify("-{$minutes} minutes"));
     }
-    
+
     public function scopeStale($query, int $minutes = 15)
     {
-        return $query->where('quote_time', '<', now()->subMinutes($minutes));
+        return $query->where('quote_time', '<', DateTimeHelper::now()->modify("-{$minutes} minutes"));
     }
     
     public function scopeByMarketState($query, string $state)
