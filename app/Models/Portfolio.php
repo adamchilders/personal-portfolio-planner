@@ -63,19 +63,23 @@ class Portfolio extends Model
     
     public function getTotalValue(): float
     {
-        return $this->holdings()
+        $result = $this->holdings()
             ->where('is_active', true)
             ->join('stock_quotes', 'portfolio_holdings.stock_symbol', '=', 'stock_quotes.symbol')
             ->selectRaw('SUM(portfolio_holdings.quantity * stock_quotes.current_price) as total_value')
-            ->value('total_value') ?? 0.0;
+            ->value('total_value');
+
+        return (float)($result ?? 0.0);
     }
     
     public function getTotalCostBasis(): float
     {
-        return $this->holdings()
+        $result = $this->holdings()
             ->where('is_active', true)
             ->selectRaw('SUM(quantity * avg_cost_basis) as total_cost')
-            ->value('total_cost') ?? 0.0;
+            ->value('total_cost');
+
+        return (float)($result ?? 0.0);
     }
     
     public function getTotalGainLoss(): float
