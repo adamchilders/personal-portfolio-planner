@@ -16,35 +16,32 @@ RUN apt-get update && apt-get install -y \
     unzip \
     libfreetype6-dev \
     libjpeg62-turbo-dev \
-    libmcrypt-dev \
     libssl-dev \
     libcurl4-openssl-dev \
     pkg-config \
-    libssl-dev \
     cron \
     supervisor \
     vim \
     nano \
     htop \
+    libicu-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Install PHP extensions
-RUN docker-php-ext-configure gd --with-freetype --with-jpeg \
-    && docker-php-ext-install -j$(nproc) \
-        pdo_mysql \
-        mbstring \
-        exif \
-        pcntl \
-        bcmath \
-        gd \
-        zip \
-        curl \
-        xml \
-        json \
-        intl \
-        opcache
+# Configure and install GD extension first
+RUN docker-php-ext-configure gd --with-freetype --with-jpeg
 
-# Install Redis extension
+# Install PHP extensions one by one to avoid conflicts
+RUN docker-php-ext-install -j$(nproc) pdo_mysql
+RUN docker-php-ext-install -j$(nproc) mbstring
+RUN docker-php-ext-install -j$(nproc) exif
+RUN docker-php-ext-install -j$(nproc) pcntl
+RUN docker-php-ext-install -j$(nproc) bcmath
+RUN docker-php-ext-install -j$(nproc) gd
+RUN docker-php-ext-install -j$(nproc) zip
+RUN docker-php-ext-install -j$(nproc) intl
+RUN docker-php-ext-install -j$(nproc) opcache
+
+# Install Redis extension via PECL
 RUN pecl install redis \
     && docker-php-ext-enable redis
 

@@ -11,13 +11,29 @@ help: ## Show this help message
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 # Development commands
+setup: ## Quick setup without composer install
+	@echo "Quick setup of Portfolio Tracker..."
+	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env file from .env.example"; fi
+	@echo "Building and starting development containers..."
+	docker-compose -f docker-compose.dev.yml up -d --build
+	@echo "Setup complete! Access the app at http://localhost:8080"
+
 install: ## Install dependencies and set up the project
 	@echo "Setting up Portfolio Tracker..."
-	cp .env.example .env
+	@if [ ! -f .env ]; then cp .env.example .env; echo "Created .env file from .env.example"; fi
+	@echo "Building development containers..."
 	docker-compose -f docker-compose.dev.yml build
+	@echo "Starting development environment..."
 	docker-compose -f docker-compose.dev.yml up -d
+	@echo "Waiting for containers to be ready..."
+	@sleep 10
+	@echo "Installing PHP dependencies..."
 	docker-compose -f docker-compose.dev.yml exec app composer install
-	@echo "Setup complete! Access the app at http://localhost:8080"
+	@echo ""
+	@echo "Setup complete! 🎉"
+	@echo "Access the app at: http://localhost:8080"
+	@echo "PHPMyAdmin at: http://localhost:8081"
+	@echo "Redis Commander at: http://localhost:8082"
 
 dev-up: ## Start development environment
 	docker-compose -f docker-compose.dev.yml up -d
