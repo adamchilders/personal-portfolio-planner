@@ -1,0 +1,106 @@
+# Environment files
+.env
+.env.local
+.env.production
+.env.staging
+
+# Composer
+/vendor/
+composer.lock
+
+# Node modules (if using npm/yarn for frontend assets)
+node_modules/
+npm-debug.log
+yarn-error.log
+package-lock.json
+yarn.lock
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Application storage
+/storage/logs/*.log
+/storage/cache/*
+/storage/sessions/*
+/storage/uploads/*
+/bootstrap/cache/*
+
+# Docker volumes
+mysql_data/
+redis_data/
+mysql_dev_data/
+redis_dev_data/
+
+# SSL certificates
+nginx/ssl/*
+!nginx/ssl/.gitkeep
+
+# Backup files
+*.sql.gz
+*.sql.bak
+backups/
+
+# Testing
+/coverage/
+.phpunit.result.cache
+phpunit.xml
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Application specific
+/public/uploads/
+/public/assets/compiled/
+
+# Docker override files
+docker-compose.override.yml
+
+# Local development tools
+.php_cs.cache
+.phpstan.cache
+
+# Documentation builds
+/docs/_build/
+
+# Logs
+*.log
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+
+# Dependency directories
+jspm_packages/
+
+# Optional npm cache directory
+.npm
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+
+# Yarn Integrity file
+.yarn-integrity

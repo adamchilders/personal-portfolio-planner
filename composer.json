@@ -1,0 +1,74 @@
+{
+    "name": "portfolio-tracker/app",
+    "description": "Personal Portfolio Tracker - A comprehensive stock portfolio tracking application",
+    "type": "project",
+    "license": "MIT",
+    "require": {
+        "php": "^8.4",
+        "slim/slim": "^4.12",
+        "slim/psr7": "^1.6",
+        "slim/twig-view": "^3.3",
+        "twig/twig": "^3.7",
+        "illuminate/database": "^10.0",
+        "predis/predis": "^2.2",
+        "monolog/monolog": "^3.4",
+        "vlucas/phpdotenv": "^5.5",
+        "ramsey/uuid": "^4.7",
+        "firebase/php-jwt": "^6.8",
+        "guzzlehttp/guzzle": "^7.8",
+        "league/container": "^4.2",
+        "symfony/console": "^6.3",
+        "nesbot/carbon": "^2.69"
+    },
+    "require-dev": {
+        "phpunit/phpunit": "^10.3",
+        "phpstan/phpstan": "^1.10",
+        "squizlabs/php_codesniffer": "^3.7",
+        "friendsofphp/php-cs-fixer": "^3.22",
+        "mockery/mockery": "^1.6",
+        "fakerphp/faker": "^1.23"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/",
+            "Database\\": "database/"
+        },
+        "files": [
+            "app/helpers.php"
+        ]
+    },
+    "autoload-dev": {
+        "psr-4": {
+            "Tests\\": "tests/"
+        }
+    },
+    "scripts": {
+        "test": "phpunit",
+        "test-coverage": "phpunit --coverage-html coverage",
+        "phpstan": "phpstan analyse",
+        "cs-check": "phpcs",
+        "cs-fix": "phpcbf",
+        "php-cs-fixer": "php-cs-fixer fix",
+        "quality": [
+            "@cs-check",
+            "@phpstan",
+            "@test"
+        ],
+        "migrate": "php bin/migrate.php",
+        "seed": "php bin/seed.php",
+        "serve": "php -S localhost:8000 -t public",
+        "post-install-cmd": [
+            "@php -r \"file_exists('.env') || copy('.env.example', '.env');\""
+        ]
+    },
+    "config": {
+        "optimize-autoloader": true,
+        "preferred-install": "dist",
+        "sort-packages": true,
+        "allow-plugins": {
+            "composer/package-versions-deprecated": true
+        }
+    },
+    "minimum-stability": "stable",
+    "prefer-stable": true
+}
