@@ -75,23 +75,55 @@ class AuthController
         }
         
         $result = $this->authService->register($data);
-        
+
         if (!$result['success']) {
             return $this->errorResponse($response, $result['message'], 400);
         }
-        
-        $responseData = [
-            'success' => true,
-            'message' => 'Registration successful',
-            'user' => [
-                'id' => $result['user']->id,
-                'username' => $result['user']->username,
-                'email' => $result['user']->email,
-                'role' => $result['user']->role,
-                'display_name' => $result['user']->display_name
-            ],
-            'is_first_user' => $result['is_first_user']
-        ];
+
+        // Auto-login the user after successful registration
+        $ipAddress = $this->getClientIp($request);
+        $userAgent = $request->getHeaderLine('User-Agent');
+
+        $loginResult = $this->authService->login(
+            $result['user']->username,
+            $data['password'],
+            $ipAddress,
+            $userAgent
+        );
+
+        if (!$loginResult['success']) {
+            // Registration succeeded but auto-login failed - still return success
+            $responseData = [
+                'success' => true,
+                'message' => 'Registration successful. Please log in.',
+                'user' => [
+                    'id' => $result['user']->id,
+                    'username' => $result['user']->username,
+                    'email' => $result['user']->email,
+                    'role' => $result['user']->role,
+                    'display_name' => $result['user']->display_name
+                ],
+                'is_first_user' => $result['is_first_user']
+            ];
+        } else {
+            // Registration and auto-login both succeeded
+            $cookie = $this->authService->generateSessionCookie($loginResult['token']);
+            $response = $response->withHeader('Set-Cookie', $this->formatCookie($cookie));
+
+            $responseData = [
+                'success' => true,
+                'message' => 'Registration successful',
+                'user' => [
+                    'id' => $result['user']->id,
+                    'username' => $result['user']->username,
+                    'email' => $result['user']->email,
+                    'role' => $result['user']->role,
+                    'display_name' => $result['user']->display_name
+                ],
+                'is_first_user' => $result['is_first_user'],
+                'token' => $loginResult['token']
+            ];
+        }
         
         $response->getBody()->write(json_encode($responseData));
         return $response->withHeader('Content-Type', 'application/json')->withStatus(201);
