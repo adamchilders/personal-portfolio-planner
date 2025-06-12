@@ -43,6 +43,13 @@ class PortfolioApp {
                 this.handleForm(formType, e.target);
             }
         });
+
+        // Stock search input
+        document.addEventListener('input', (e) => {
+            if (e.target.matches('[data-stock-search]')) {
+                this.handleStockSearch(e.target);
+            }
+        });
     }
     
     async handleAction(action, element) {
@@ -79,6 +86,17 @@ class PortfolioApp {
             case 'show-add-transaction':
                 const portfolioIdForTransaction = element.dataset.portfolioId;
                 this.showAddTransactionModal(portfolioIdForTransaction);
+                break;
+            case 'show-stock-detail':
+                const symbol = element.dataset.symbol;
+                this.showStockDetailModal(symbol);
+                break;
+            case 'select-stock':
+                this.selectStock(element.dataset.symbol, element.dataset.name);
+                break;
+            case 'refresh-portfolio':
+                const portfolioIdToRefresh = element.dataset.portfolioId;
+                this.refreshPortfolio(portfolioIdToRefresh);
                 break;
         }
     }
@@ -263,6 +281,122 @@ class PortfolioApp {
         } catch (error) {
             this.showError('Failed to record transaction. Please try again.');
             console.error('Add transaction error:', error);
+        }
+    }
+
+    async handleStockSearch(input) {
+        const query = input.value.trim();
+        const resultsContainer = input.parentElement.querySelector('.stock-search-results');
+
+        if (query.length < 1) {
+            if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+            }
+            return;
+        }
+
+        try {
+            // Debounce the search
+            clearTimeout(this.searchTimeout);
+            this.searchTimeout = setTimeout(async () => {
+                const results = await this.searchStocks(query);
+                this.displayStockSearchResults(results, resultsContainer, input);
+            }, 300);
+        } catch (error) {
+            console.error('Stock search error:', error);
+        }
+    }
+
+    async searchStocks(query) {
+        try {
+            const response = await this.apiCall(`/stocks/search?q=${encodeURIComponent(query)}&limit=8`);
+            return response.results || [];
+        } catch (error) {
+            console.error('Search stocks error:', error);
+            return [];
+        }
+    }
+
+    displayStockSearchResults(results, container, input) {
+        if (!container) return;
+
+        if (results.length === 0) {
+            container.innerHTML = '<div class="stock-search-item">No stocks found</div>';
+            container.style.display = 'block';
+            return;
+        }
+
+        container.innerHTML = results.map(stock => `
+            <div class="stock-search-item" data-action="select-stock" data-symbol="${stock.symbol}" data-name="${stock.name}">
+                <div class="flex justify-between items-center">
+                    <div>
+                        <div style="font-weight: 600; color: var(--gray-900);">${stock.symbol}</div>
+                        <div style="font-size: var(--font-size-sm); color: var(--gray-600);">${stock.name}</div>
+                    </div>
+                    <div style="font-size: var(--font-size-sm); color: var(--gray-500);">${stock.exchange || ''}</div>
+                </div>
+            </div>
+        `).join('');
+
+        container.style.display = 'block';
+    }
+
+    selectStock(symbol, name) {
+        // Find the active stock search input
+        const activeInput = document.querySelector('[data-stock-search]:focus, [data-stock-search].active');
+        if (activeInput) {
+            activeInput.value = symbol;
+            activeInput.dataset.selectedSymbol = symbol;
+            activeInput.dataset.selectedName = name;
+
+            // Hide search results
+            const resultsContainer = activeInput.parentElement.querySelector('.stock-search-results');
+            if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+            }
+
+            // Trigger change event
+            activeInput.dispatchEvent(new Event('change'));
+        }
+    }
+
+    async showStockDetailModal(symbol) {
+        try {
+            this.showLoading('Loading stock information...');
+
+            const stockData = await this.apiCall(`/stocks/${symbol}`);
+            this.showModal(this.getStockDetailModalHTML(stockData));
+        } catch (error) {
+            this.showError('Failed to load stock information');
+            console.error('Stock detail error:', error);
+        }
+    }
+
+    async refreshPortfolio(portfolioId) {
+        try {
+            // Get all stock symbols in the portfolio
+            const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
+            const symbols = portfolio.holdings.map(h => h.symbol);
+
+            if (symbols.length > 0) {
+                this.showLoading('Updating stock prices...');
+
+                // Update quotes for all stocks in the portfolio
+                await this.apiCall('/stocks/quotes', {
+                    method: 'POST',
+                    body: JSON.stringify({ symbols })
+                });
+
+                this.showSuccess('Portfolio updated with latest prices!');
+
+                // Refresh the portfolio view
+                this.showPortfolioDetail(portfolioId);
+            } else {
+                this.showSuccess('Portfolio is up to date!');
+            }
+        } catch (error) {
+            this.showError('Failed to refresh portfolio');
+            console.error('Refresh portfolio error:', error);
         }
     }
     
@@ -797,8 +931,11 @@ class PortfolioApp {
 
                         <div class="form-group">
                             <label class="form-label" for="stock_symbol">Stock Symbol</label>
-                            <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="e.g., AAPL" style="text-transform: uppercase;" required>
-                            <small class="text-muted">Enter the stock ticker symbol (e.g., AAPL for Apple Inc.)</small>
+                            <div style="position: relative;">
+                                <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="Search for a stock..." data-stock-search autocomplete="off" required>
+                                <div class="stock-search-results" style="display: none;"></div>
+                            </div>
+                            <small class="text-muted">Start typing to search for stocks (e.g., "Apple" or "AAPL")</small>
                         </div>
 
                         <div class="grid grid-cols-2 gap-4">
@@ -845,7 +982,10 @@ class PortfolioApp {
                         <div class="grid grid-cols-2 gap-4">
                             <div class="form-group">
                                 <label class="form-label" for="stock_symbol">Stock Symbol</label>
-                                <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="e.g., AAPL" style="text-transform: uppercase;" required>
+                                <div style="position: relative;">
+                                    <input type="text" id="stock_symbol" name="stock_symbol" class="form-input" placeholder="Search for a stock..." data-stock-search autocomplete="off" required>
+                                    <div class="stock-search-results" style="display: none;"></div>
+                                </div>
                             </div>
 
                             <div class="form-group">
@@ -917,6 +1057,9 @@ class PortfolioApp {
                                 <p class="text-muted" style="margin-bottom: 0;">${holdings.length} holdings • ${portfolio.currency}</p>
                             </div>
                             <div class="flex gap-4">
+                                <button data-action="refresh-portfolio" data-portfolio-id="${portfolio.id}" class="btn btn-secondary" title="Refresh stock prices">
+                                    🔄 Refresh
+                                </button>
                                 <button data-action="show-add-holding" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Holding</button>
                                 <button data-action="show-add-transaction" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">+ Add Transaction</button>
                             </div>
@@ -959,6 +1102,9 @@ class PortfolioApp {
                     </div>
                 </section>
 
+                <!-- Portfolio Analytics -->
+                ${holdings.length > 0 ? this.getPortfolioAnalyticsHTML(holdings, performance) : ''}
+
                 <!-- Holdings Table -->
                 <section class="py-8">
                     <div class="container">
@@ -994,55 +1140,236 @@ class PortfolioApp {
     getHoldingsTableHTML(holdings) {
         return `
             <div style="overflow-x: auto;">
-                <table style="width: 100%; border-collapse: collapse;">
+                <table class="holdings-table">
                     <thead>
-                        <tr style="border-bottom: 1px solid var(--gray-200);">
-                            <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Symbol</th>
-                            <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Name</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Shares</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Avg Cost</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Current Price</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Market Value</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Gain/Loss</th>
-                            <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Weight</th>
+                        <tr>
+                            <th style="text-align: left;">Symbol</th>
+                            <th style="text-align: left;">Name</th>
+                            <th style="text-align: right;">Shares</th>
+                            <th style="text-align: right;">Avg Cost</th>
+                            <th style="text-align: right;">Current Price</th>
+                            <th style="text-align: right;">Market Value</th>
+                            <th style="text-align: right;">Gain/Loss</th>
+                            <th style="text-align: right;">Weight</th>
                         </tr>
                     </thead>
                     <tbody>
                         ${holdings.map(holding => `
-                            <tr style="border-bottom: 1px solid var(--gray-100);">
-                                <td style="padding: var(--space-4) var(--space-3);">
-                                    <div style="font-weight: 600; color: var(--gray-900);">${holding.symbol}</div>
+                            <tr>
+                                <td>
+                                    <div class="stock-symbol" data-action="show-stock-detail" data-symbol="${holding.symbol}">${holding.symbol}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3);">
+                                <td>
                                     <div style="color: var(--gray-700);">${holding.name || holding.symbol}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                <td style="text-align: right;">
                                     <div>${this.formatNumber(holding.quantity)}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                <td style="text-align: right;">
                                     <div>$${this.formatNumber(holding.avg_cost_basis)}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                <td style="text-align: right;">
                                     <div>$${this.formatNumber(holding.current_price)}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                <td style="text-align: right;">
                                     <div style="font-weight: 600;">$${this.formatNumber(holding.current_value)}</div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
-                                    <div style="color: ${holding.gain_loss >= 0 ? 'var(--success-green)' : 'var(--danger-red)'}; font-weight: 500;">
+                                <td style="text-align: right;">
+                                    <div class="performance-indicator ${holding.gain_loss >= 0 ? 'positive' : 'negative'}">
                                         ${holding.gain_loss >= 0 ? '+' : ''}$${this.formatNumber(holding.gain_loss)}
                                     </div>
                                     <div style="font-size: var(--font-size-sm); color: ${holding.gain_loss_percent >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
                                         ${holding.gain_loss_percent >= 0 ? '+' : ''}${holding.gain_loss_percent.toFixed(2)}%
                                     </div>
                                 </td>
-                                <td style="padding: var(--space-4) var(--space-3); text-align: right;">
+                                <td style="text-align: right;">
                                     <div>${holding.weight.toFixed(1)}%</div>
                                 </td>
                             </tr>
                         `).join('')}
                     </tbody>
                 </table>
+            </div>
+        `;
+    }
+
+    getPortfolioAnalyticsHTML(holdings, performance) {
+        // Calculate sector allocation (simplified - using first letter of symbol as mock sector)
+        const sectorData = this.calculateSectorAllocation(holdings);
+        const topHoldings = holdings.slice(0, 5); // Top 5 holdings by value
+
+        return `
+            <section class="py-8" style="background: var(--gray-50);">
+                <div class="container">
+                    <h3 class="mb-6">Portfolio Analytics</h3>
+
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Top Holdings -->
+                        <div class="analytics-card">
+                            <h4 class="mb-4">Top Holdings</h4>
+                            <div class="space-y-3">
+                                ${topHoldings.map(holding => `
+                                    <div class="flex justify-between items-center">
+                                        <div class="flex items-center gap-3">
+                                            <div class="stock-symbol" data-action="show-stock-detail" data-symbol="${holding.symbol}" style="font-size: var(--font-size-sm);">${holding.symbol}</div>
+                                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">${holding.name || holding.symbol}</div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div style="font-weight: 600; font-size: var(--font-size-sm);">${holding.weight.toFixed(1)}%</div>
+                                            <div style="font-size: var(--font-size-xs); color: var(--gray-500);">$${this.formatNumber(holding.current_value)}</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <!-- Performance Metrics -->
+                        <div class="analytics-card">
+                            <h4 class="mb-4">Performance Metrics</h4>
+                            <div class="grid grid-cols-2 gap-4">
+                                <div class="metric-card">
+                                    <div class="metric-value" style="color: ${performance.total_gain_loss >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
+                                        ${performance.total_gain_loss >= 0 ? '+' : ''}${performance.total_gain_loss_percent.toFixed(2)}%
+                                    </div>
+                                    <div class="metric-label">Total Return</div>
+                                </div>
+
+                                <div class="metric-card">
+                                    <div class="metric-value">
+                                        ${this.calculateBestPerformer(holdings).symbol || 'N/A'}
+                                    </div>
+                                    <div class="metric-label">Best Performer</div>
+                                </div>
+
+                                <div class="metric-card">
+                                    <div class="metric-value">
+                                        ${holdings.length}
+                                    </div>
+                                    <div class="metric-label">Holdings</div>
+                                </div>
+
+                                <div class="metric-card">
+                                    <div class="metric-value">
+                                        ${this.calculateDiversificationScore(holdings).toFixed(1)}
+                                    </div>
+                                    <div class="metric-label">Diversification</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
+    }
+
+    calculateSectorAllocation(holdings) {
+        // Simplified sector calculation - in a real app, this would use actual sector data
+        const sectors = {};
+        holdings.forEach(holding => {
+            const sector = this.getMockSector(holding.symbol);
+            sectors[sector] = (sectors[sector] || 0) + holding.weight;
+        });
+        return sectors;
+    }
+
+    getMockSector(symbol) {
+        // Mock sector assignment based on symbol
+        const sectorMap = {
+            'A': 'Technology', 'B': 'Healthcare', 'C': 'Finance', 'D': 'Consumer',
+            'E': 'Energy', 'F': 'Finance', 'G': 'Technology', 'H': 'Healthcare',
+            'I': 'Industrial', 'J': 'Consumer', 'K': 'Technology', 'L': 'Healthcare',
+            'M': 'Technology', 'N': 'Energy', 'O': 'Industrial', 'P': 'Healthcare',
+            'Q': 'Technology', 'R': 'Consumer', 'S': 'Technology', 'T': 'Technology',
+            'U': 'Utilities', 'V': 'Healthcare', 'W': 'Consumer', 'X': 'Technology',
+            'Y': 'Technology', 'Z': 'Technology'
+        };
+        return sectorMap[symbol.charAt(0)] || 'Other';
+    }
+
+    calculateBestPerformer(holdings) {
+        return holdings.reduce((best, holding) => {
+            return holding.gain_loss_percent > (best.gain_loss_percent || -Infinity) ? holding : best;
+        }, {});
+    }
+
+    calculateDiversificationScore(holdings) {
+        // Simple diversification score based on number of holdings and weight distribution
+        if (holdings.length === 0) return 0;
+
+        const maxWeight = Math.max(...holdings.map(h => h.weight));
+        const baseScore = Math.min(holdings.length * 10, 70); // Up to 70 points for number of holdings
+        const concentrationPenalty = maxWeight > 50 ? (maxWeight - 50) : 0; // Penalty for concentration
+
+        return Math.max(0, Math.min(100, baseScore - concentrationPenalty));
+    }
+
+    getStockDetailModalHTML(stockData) {
+        const quote = stockData.quote;
+
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 600px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h3 style="margin-bottom: var(--space-2);">${stockData.symbol}</h3>
+                            <p class="text-muted" style="margin-bottom: 0;">${stockData.name}</p>
+                        </div>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    ${quote ? `
+                        <div class="grid grid-cols-2 gap-6 mb-6">
+                            <div class="text-center">
+                                <div style="font-size: var(--font-size-3xl); font-weight: 600; margin-bottom: var(--space-2);">
+                                    ${quote.formatted_price}
+                                </div>
+                                <div class="text-muted">Current Price</div>
+                            </div>
+
+                            <div class="text-center">
+                                <div style="font-size: var(--font-size-xl); font-weight: 600; margin-bottom: var(--space-2); color: ${quote.change_direction === 'up' ? 'var(--success-green)' : quote.change_direction === 'down' ? 'var(--danger-red)' : 'var(--gray-600)'};">
+                                    ${quote.formatted_change} (${quote.formatted_change_percent})
+                                </div>
+                                <div class="text-muted">Today's Change</div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mb-6">
+                            <div class="text-center p-4" style="background: var(--gray-50); border-radius: var(--radius-md);">
+                                <div style="font-weight: 600; margin-bottom: var(--space-1);">${quote.formatted_volume}</div>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">Volume</div>
+                            </div>
+
+                            <div class="text-center p-4" style="background: var(--gray-50); border-radius: var(--radius-md);">
+                                <div style="font-weight: 600; margin-bottom: var(--space-1);">$${this.formatNumber(quote.fifty_two_week_high || 0)}</div>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">52W High</div>
+                            </div>
+
+                            <div class="text-center p-4" style="background: var(--gray-50); border-radius: var(--radius-md);">
+                                <div style="font-weight: 600; margin-bottom: var(--space-1);">$${this.formatNumber(quote.fifty_two_week_low || 0)}</div>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">52W Low</div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="text-muted">Market State:</span>
+                            <span class="badge ${quote.market_state === 'REGULAR' ? 'badge-success' : 'badge-warning'}">${quote.market_state_label || quote.market_state}</span>
+                        </div>
+
+                        <div class="flex justify-between items-center">
+                            <span class="text-muted">Exchange:</span>
+                            <span>${stockData.exchange || 'N/A'}</span>
+                        </div>
+                    ` : `
+                        <div class="text-center py-8">
+                            <div class="text-muted">No current quote data available</div>
+                        </div>
+                    `}
+
+                    <div class="flex gap-4 mt-6">
+                        <button data-action="close-modal" class="btn btn-secondary btn-lg" style="flex: 1;">Close</button>
+                    </div>
+                </div>
             </div>
         `;
     }

@@ -74,30 +74,31 @@ class StockQuote extends Model
     
     public function getFormattedPrice(): string
     {
-        return '$' . number_format($this->current_price, 2);
+        return '$' . number_format((float)$this->current_price, 2);
     }
-    
+
     public function getFormattedChange(): string
     {
         $sign = $this->change_amount >= 0 ? '+' : '';
-        return $sign . '$' . number_format($this->change_amount, 2);
+        return $sign . '$' . number_format((float)$this->change_amount, 2);
     }
-    
+
     public function getFormattedChangePercent(): string
     {
         $sign = $this->change_percent >= 0 ? '+' : '';
-        return $sign . number_format($this->change_percent, 2) . '%';
+        return $sign . number_format((float)$this->change_percent, 2) . '%';
     }
     
     public function getFormattedVolume(): string
     {
-        if ($this->volume >= 1000000) {
-            return number_format($this->volume / 1000000, 1) . 'M';
-        } elseif ($this->volume >= 1000) {
-            return number_format($this->volume / 1000, 1) . 'K';
+        $volume = (int)$this->volume;
+        if ($volume >= 1000000) {
+            return number_format($volume / 1000000, 1) . 'M';
+        } elseif ($volume >= 1000) {
+            return number_format($volume / 1000, 1) . 'K';
         }
-        
-        return number_format($this->volume);
+
+        return number_format($volume);
     }
     
     public function isMarketOpen(): bool

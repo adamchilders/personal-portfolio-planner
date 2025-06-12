@@ -483,6 +483,162 @@ table tbody tr:hover {
     gap: var(--space-6);
 }
 
+/* Stock Search Styles */
+.stock-search-results {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: white;
+    border: 1px solid var(--gray-300);
+    border-top: none;
+    border-radius: 0 0 var(--radius-md) var(--radius-md);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+.stock-search-item {
+    padding: var(--space-3) var(--space-4);
+    cursor: pointer;
+    border-bottom: 1px solid var(--gray-100);
+    transition: background-color 0.2s ease;
+}
+
+.stock-search-item:hover {
+    background-color: var(--gray-50);
+}
+
+.stock-search-item:last-child {
+    border-bottom: none;
+}
+
+/* Enhanced Form Styles */
+.form-input[data-stock-search] {
+    padding-right: var(--space-10);
+}
+
+.form-input[data-stock-search]:focus + .stock-search-results {
+    border-color: var(--primary-blue);
+}
+
+/* Portfolio Analytics Styles */
+.analytics-card {
+    background: linear-gradient(135deg, var(--gray-50), white);
+    border: 1px solid var(--gray-200);
+    border-radius: var(--radius-lg);
+    padding: var(--space-6);
+}
+
+.metric-card {
+    text-align: center;
+    padding: var(--space-4);
+    background: white;
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-200);
+    transition: box-shadow 0.2s ease;
+}
+
+.metric-card:hover {
+    box-shadow: var(--shadow-md);
+}
+
+.metric-value {
+    font-size: var(--font-size-2xl);
+    font-weight: 600;
+    margin-bottom: var(--space-2);
+}
+
+.metric-label {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+/* Performance Indicators */
+.performance-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-1);
+    font-weight: 500;
+}
+
+.performance-indicator.positive {
+    color: var(--success-green);
+}
+
+.performance-indicator.negative {
+    color: var(--danger-red);
+}
+
+.performance-indicator.neutral {
+    color: var(--gray-600);
+}
+
+.performance-indicator::before {
+    content: '';
+    width: 0;
+    height: 0;
+    border-left: 4px solid transparent;
+    border-right: 4px solid transparent;
+}
+
+.performance-indicator.positive::before {
+    border-bottom: 6px solid var(--success-green);
+}
+
+.performance-indicator.negative::before {
+    border-top: 6px solid var(--danger-red);
+}
+
+/* Enhanced Table Styles */
+.holdings-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.holdings-table th {
+    background: var(--gray-50);
+    padding: var(--space-4);
+    font-weight: 600;
+    color: var(--gray-700);
+    font-size: var(--font-size-sm);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.holdings-table td {
+    padding: var(--space-4);
+    border-bottom: 1px solid var(--gray-100);
+}
+
+.holdings-table tbody tr:hover {
+    background-color: var(--gray-50);
+}
+
+.holdings-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* Stock Symbol Styling */
+.stock-symbol {
+    font-weight: 600;
+    color: var(--primary-blue);
+    cursor: pointer;
+    transition: color 0.2s ease;
+}
+
+.stock-symbol:hover {
+    color: var(--primary-blue-dark);
+    text-decoration: underline;
+}
+
 /* Responsive Enhancements */
 @media (max-width: 768px) {
     .modal-overlay {
@@ -507,5 +663,17 @@ table tbody tr:hover {
     .btn-lg {
         padding: var(--space-3) var(--space-6);
         font-size: var(--font-size-sm);
+    }
+
+    .stock-search-results {
+        max-height: 200px;
+    }
+
+    .metric-card {
+        padding: var(--space-3);
+    }
+
+    .metric-value {
+        font-size: var(--font-size-xl);
     }
 }
