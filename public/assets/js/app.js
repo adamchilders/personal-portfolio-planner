@@ -98,6 +98,9 @@ class PortfolioApp {
                 const portfolioIdToRefresh = element.dataset.portfolioId;
                 this.refreshPortfolio(portfolioIdToRefresh);
                 break;
+            case 'change-chart-period':
+                this.changeChartPeriod(element.dataset.period);
+                break;
         }
     }
     
@@ -399,6 +402,38 @@ class PortfolioApp {
             console.error('Refresh portfolio error:', error);
         }
     }
+
+    changeChartPeriod(period) {
+        // Update active period button
+        document.querySelectorAll('[data-action="change-chart-period"]').forEach(btn => {
+            btn.classList.remove('active');
+        });
+        document.querySelector(`[data-period="${period}"]`).classList.add('active');
+
+        // Update charts with new period
+        this.updatePortfolioCharts(period);
+    }
+
+    updatePortfolioCharts(period = '1M') {
+        const days = this.getPeriodDays(period);
+
+        // Update performance chart
+        const performanceData = window.portfolioCharts.generateMockPerformanceData(days);
+        window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+
+        this.showSuccess(`Charts updated for ${period} period`);
+    }
+
+    getPeriodDays(period) {
+        const periodMap = {
+            '1D': 1,
+            '1W': 7,
+            '1M': 30,
+            '3M': 90,
+            '1Y': 365
+        };
+        return periodMap[period] || 30;
+    }
     
     async apiCall(endpoint, options = {}) {
         const url = this.apiBase + endpoint;
@@ -431,6 +466,13 @@ class PortfolioApp {
             
             const portfolios = await this.apiCall('/portfolios');
             document.getElementById('app').innerHTML = this.getDashboardHTML(portfolios);
+
+            // Initialize dashboard charts if there are portfolios
+            if (portfolios.portfolios && portfolios.portfolios.length > 0) {
+                setTimeout(() => {
+                    this.initializeDashboardCharts(portfolios.portfolios);
+                }, 100);
+            }
         } catch (error) {
             this.showError('Failed to load dashboard');
             console.error('Dashboard error:', error);
@@ -447,10 +489,65 @@ class PortfolioApp {
 
             const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
             document.getElementById('app').innerHTML = this.getPortfolioDetailHTML(portfolio);
+
+            // Initialize charts after DOM is ready
+            setTimeout(() => {
+                this.initializePortfolioCharts(portfolio);
+            }, 100);
         } catch (error) {
             this.showError('Failed to load portfolio details');
             console.error('Portfolio detail error:', error);
         }
+    }
+
+    initializePortfolioCharts(portfolioData) {
+        const holdings = portfolioData.holdings || [];
+
+        if (holdings.length === 0) return;
+
+        // Performance Chart
+        const performanceData = window.portfolioCharts.generateMockPerformanceData(30);
+        window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+
+        // Sector Chart
+        const sectorData = window.portfolioCharts.generateSectorData(holdings);
+        window.portfolioCharts.createSectorChart('sectorChart', sectorData);
+
+        // Holdings Performance Chart
+        const holdingsData = window.portfolioCharts.generateHoldingsData(holdings);
+        window.portfolioCharts.createHoldingsChart('holdingsChart', holdingsData);
+    }
+
+    initializeDashboardCharts(portfolios) {
+        // Create overview performance chart
+        const overviewData = this.generateDashboardOverviewData(portfolios);
+        window.portfolioCharts.createPerformanceChart('dashboardOverviewChart', overviewData);
+
+        // Create portfolio allocation chart
+        const allocationData = this.generatePortfolioAllocationData(portfolios);
+        window.portfolioCharts.createSectorChart('portfolioAllocationChart', allocationData);
+    }
+
+    generateDashboardOverviewData(portfolios) {
+        // Generate mock data for total portfolio value over time
+        const totalValue = portfolios.reduce((sum, p) => sum + p.total_value, 0);
+        return window.portfolioCharts.generateMockPerformanceData(30);
+    }
+
+    generatePortfolioAllocationData(portfolios) {
+        const labels = portfolios.map(p => p.name);
+        const data = portfolios.map(p => p.total_value);
+        const colors = portfolios.map((_, index) => window.portfolioCharts.sectorColors[index % window.portfolioCharts.sectorColors.length]);
+
+        return {
+            labels,
+            datasets: [{
+                data,
+                backgroundColor: colors,
+                borderColor: colors.map(color => color + 'CC'),
+                borderWidth: 2
+            }]
+        };
     }
 
     showCreatePortfolioModal() {
@@ -798,10 +895,38 @@ class PortfolioApp {
                 <!-- Main Content -->
                 <main class="py-8">
                     <div class="container">
-                        ${portfolios.length === 0 ? this.getEmptyStateHTML() : this.getPortfoliosGridHTML(portfolios)}
+                        ${portfolios.length === 0 ? this.getEmptyStateHTML() : this.getDashboardContentHTML(portfolios)}
                     </div>
                 </main>
             </div>
+        `;
+    }
+
+    getDashboardContentHTML(portfolios) {
+        return `
+            <!-- Dashboard Overview Charts -->
+            <section class="mb-8">
+                <div class="grid grid-cols-2 gap-6">
+                    <!-- Total Portfolio Performance -->
+                    <div class="card">
+                        <h3 class="mb-4">Total Portfolio Performance</h3>
+                        <div style="height: 250px; position: relative;">
+                            <canvas id="dashboardOverviewChart"></canvas>
+                        </div>
+                    </div>
+
+                    <!-- Portfolio Allocation -->
+                    <div class="card">
+                        <h3 class="mb-4">Portfolio Allocation</h3>
+                        <div style="height: 250px; position: relative;">
+                            <canvas id="portfolioAllocationChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Portfolios Grid -->
+            ${this.getPortfoliosGridHTML(portfolios)}
         `;
     }
 
@@ -1102,6 +1227,9 @@ class PortfolioApp {
                     </div>
                 </section>
 
+                <!-- Portfolio Charts -->
+                ${holdings.length > 0 ? this.getPortfolioChartsHTML(holdings, performance) : ''}
+
                 <!-- Portfolio Analytics -->
                 ${holdings.length > 0 ? this.getPortfolioAnalyticsHTML(holdings, performance) : ''}
 
@@ -1190,6 +1318,55 @@ class PortfolioApp {
                     </tbody>
                 </table>
             </div>
+        `;
+    }
+
+    getPortfolioChartsHTML(holdings, performance) {
+        return `
+            <section class="py-8" style="background: white;">
+                <div class="container">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Portfolio Performance</h3>
+                        <div class="chart-period-selector">
+                            <button data-action="change-chart-period" data-period="1D" class="btn btn-secondary btn-sm">1D</button>
+                            <button data-action="change-chart-period" data-period="1W" class="btn btn-secondary btn-sm">1W</button>
+                            <button data-action="change-chart-period" data-period="1M" class="btn btn-secondary btn-sm active">1M</button>
+                            <button data-action="change-chart-period" data-period="3M" class="btn btn-secondary btn-sm">3M</button>
+                            <button data-action="change-chart-period" data-period="1Y" class="btn btn-secondary btn-sm">1Y</button>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-3 gap-6">
+                        <!-- Performance Chart -->
+                        <div class="chart-container" style="grid-column: span 2;">
+                            <div class="card">
+                                <h4 class="mb-4">Portfolio Value Over Time</h4>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="performanceChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Sector Allocation -->
+                        <div class="chart-container">
+                            <div class="card">
+                                <h4 class="mb-4">Sector Allocation</h4>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="sectorChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Holdings Performance Chart -->
+                    <div class="card mt-6">
+                        <h4 class="mb-4">Individual Stock Performance</h4>
+                        <div style="height: 250px; position: relative;">
+                            <canvas id="holdingsChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
         `;
     }
 
