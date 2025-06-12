@@ -167,8 +167,22 @@ class PortfolioCharts {
                                     const dataset = data.datasets[0];
                                     const value = dataset.data[i];
                                     const total = dataset.data.reduce((a, b) => a + b, 0);
+
+                                    // Handle empty data case
+                                    if (total === 0 || label === 'No Data') {
+                                        return {
+                                            text: 'No data available',
+                                            fillStyle: dataset.backgroundColor[i],
+                                            strokeStyle: dataset.borderColor[i],
+                                            lineWidth: dataset.borderWidth,
+                                            pointStyle: 'circle',
+                                            hidden: false,
+                                            index: i
+                                        };
+                                    }
+
                                     const percentage = ((value / total) * 100).toFixed(1);
-                                    
+
                                     return {
                                         text: `${label} (${percentage}%)`,
                                         fillStyle: dataset.backgroundColor[i],

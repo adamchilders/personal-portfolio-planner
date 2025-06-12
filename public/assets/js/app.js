@@ -541,6 +541,16 @@ class PortfolioApp {
     }
 
     initializeDashboardCharts(portfolios) {
+        // Check if portfolios have any value
+        const totalValue = portfolios.reduce((sum, p) => sum + (p.total_value || 0), 0);
+
+        if (totalValue === 0) {
+            // Show empty state for charts
+            this.showEmptyChartState('dashboardOverviewChart', 'No portfolio data yet');
+            this.showEmptyChartState('portfolioAllocationChart', 'Create portfolios and add holdings to see allocation');
+            return;
+        }
+
         // Create overview performance chart
         const overviewData = this.generateDashboardOverviewData(portfolios);
         window.portfolioCharts.createPerformanceChart('dashboardOverviewChart', overviewData);
@@ -557,9 +567,25 @@ class PortfolioApp {
     }
 
     generatePortfolioAllocationData(portfolios) {
-        const labels = portfolios.map(p => p.name);
-        const data = portfolios.map(p => p.total_value);
-        const colors = portfolios.map((_, index) => window.portfolioCharts.sectorColors[index % window.portfolioCharts.sectorColors.length]);
+        // Filter out portfolios with zero value
+        const portfoliosWithValue = portfolios.filter(p => (p.total_value || 0) > 0);
+
+        if (portfoliosWithValue.length === 0) {
+            // Return empty data for empty state
+            return {
+                labels: ['No Data'],
+                datasets: [{
+                    data: [1],
+                    backgroundColor: ['#e5e7eb'],
+                    borderColor: ['#d1d5db'],
+                    borderWidth: 2
+                }]
+            };
+        }
+
+        const labels = portfoliosWithValue.map(p => p.name);
+        const data = portfoliosWithValue.map(p => p.total_value || 0);
+        const colors = portfoliosWithValue.map((_, index) => window.portfolioCharts.sectorColors[index % window.portfolioCharts.sectorColors.length]);
 
         return {
             labels,
@@ -570,6 +596,21 @@ class PortfolioApp {
                 borderWidth: 2
             }]
         };
+    }
+
+    showEmptyChartState(canvasId, message) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        const container = canvas.parentElement;
+        container.innerHTML = `
+            <div class="chart-loading">
+                <div class="text-center">
+                    <div style="font-size: 2rem; margin-bottom: var(--space-3); opacity: 0.3;">📊</div>
+                    <div style="color: var(--gray-500); font-size: var(--font-size-sm);">${message}</div>
+                </div>
+            </div>
+        `;
     }
 
     showCreatePortfolioModal() {
@@ -925,26 +966,39 @@ class PortfolioApp {
     }
 
     getDashboardContentHTML(portfolios) {
+        const hasHoldings = portfolios.some(p => (p.total_value || 0) > 0);
+
         return `
             <!-- Dashboard Overview Charts -->
             <section class="mb-8">
-                <div class="grid grid-cols-2 gap-6">
-                    <!-- Total Portfolio Performance -->
-                    <div class="card">
-                        <h3 class="mb-4">Total Portfolio Performance</h3>
-                        <div style="height: 250px; position: relative;">
-                            <canvas id="dashboardOverviewChart"></canvas>
+                ${hasHoldings ? `
+                    <div class="grid grid-cols-2 gap-6">
+                        <!-- Total Portfolio Performance -->
+                        <div class="card">
+                            <h3 class="mb-4">Total Portfolio Performance</h3>
+                            <div style="height: 250px; position: relative;">
+                                <canvas id="dashboardOverviewChart"></canvas>
+                            </div>
                         </div>
-                    </div>
 
-                    <!-- Portfolio Allocation -->
-                    <div class="card">
-                        <h3 class="mb-4">Portfolio Allocation</h3>
-                        <div style="height: 250px; position: relative;">
-                            <canvas id="portfolioAllocationChart"></canvas>
+                        <!-- Portfolio Allocation -->
+                        <div class="card">
+                            <h3 class="mb-4">Portfolio Allocation</h3>
+                            <div style="height: 250px; position: relative;">
+                                <canvas id="portfolioAllocationChart"></canvas>
+                            </div>
                         </div>
                     </div>
-                </div>
+                ` : `
+                    <div class="card text-center py-12">
+                        <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">📊</div>
+                        <h3 class="mb-4">Start Building Your Portfolio</h3>
+                        <p class="text-muted mb-6">Add holdings to your portfolios to see performance charts and analytics.</p>
+                        <div class="flex gap-4 justify-center">
+                            <button data-action="show-create-portfolio" class="btn btn-primary">Create Portfolio</button>
+                        </div>
+                    </div>
+                `}
             </section>
 
             <!-- Portfolios Grid -->
