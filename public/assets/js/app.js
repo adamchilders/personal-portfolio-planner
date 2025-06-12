@@ -9,21 +9,16 @@ class PortfolioApp {
     }
     
     async init() {
-        console.log('App initializing...');
-        console.log('Auth token from localStorage:', this.authToken);
-
         // Check if user is logged in
         if (this.authToken) {
             try {
                 await this.getCurrentUser();
-                console.log('Current user:', this.currentUser);
                 this.showDashboard();
             } catch (error) {
                 console.error('Auth check failed:', error);
                 this.logout();
             }
         } else {
-            console.log('No auth token, showing homepage');
             this.showHomepage();
         }
 
@@ -295,7 +290,7 @@ class PortfolioApp {
                 notes: data.notes
             };
 
-            console.log('Sending trade data:', tradeData);
+
 
             const response = await this.apiCall(`/portfolios/${data.portfolio_id}/transactions`, {
                 method: 'POST',
@@ -571,11 +566,9 @@ class PortfolioApp {
 
     async showPortfolioDetail(portfolioId) {
         try {
-            console.log('Loading portfolio details for ID:', portfolioId);
             this.showLoading('Loading portfolio details...');
 
             const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
-            console.log('Portfolio data received:', portfolio);
             document.getElementById('app').innerHTML = this.getPortfolioDetailHTML(portfolio);
 
             // Initialize charts after DOM is ready
