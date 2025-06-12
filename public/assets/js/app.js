@@ -130,8 +130,8 @@ class PortfolioApp {
     async login(data) {
         try {
             this.showLoading('Signing in...');
-            
-            const response = await this.apiCall('/auth/login', {
+
+            const response = await this.authCall('/auth/login', {
                 method: 'POST',
                 body: JSON.stringify({
                     identifier: data.email,
@@ -164,8 +164,8 @@ class PortfolioApp {
     async register(data) {
         try {
             this.showLoading('Creating account...');
-            
-            const response = await this.apiCall('/auth/register', {
+
+            const response = await this.authCall('/auth/register', {
                 method: 'POST',
                 body: JSON.stringify({
                     username: data.username,
@@ -443,8 +443,30 @@ class PortfolioApp {
                 ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
             }
         };
-        
+
         const response = await fetch(url, { ...defaultOptions, ...options });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
+        return await response.json();
+    }
+
+    async authCall(endpoint, options = {}) {
+        const url = endpoint; // Auth endpoints don't need /api prefix
+        const defaultOptions = {
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        };
+
+        const response = await fetch(url, { ...defaultOptions, ...options });
+
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         return await response.json();
     }
     
