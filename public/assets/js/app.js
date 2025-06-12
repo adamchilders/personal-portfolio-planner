@@ -35,6 +35,7 @@ class PortfolioApp {
         document.addEventListener('click', (e) => {
             if (e.target.matches('[data-action]')) {
                 e.preventDefault();
+                e.stopPropagation();
                 const action = e.target.dataset.action;
                 this.handleAction(action, e.target);
             }
@@ -53,6 +54,20 @@ class PortfolioApp {
         document.addEventListener('input', (e) => {
             if (e.target.matches('[data-stock-search]')) {
                 this.handleStockSearch(e.target);
+            }
+        });
+
+        // Close stock search results when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.stock-search-results') && !e.target.matches('[data-stock-search]')) {
+                this.hideAllStockSearchResults();
+            }
+        });
+
+        // Handle escape key to close stock search results
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                this.hideAllStockSearchResults();
             }
         });
     }
@@ -332,6 +347,9 @@ class PortfolioApp {
             }, 300);
         } catch (error) {
             console.error('Stock search error:', error);
+            if (resultsContainer) {
+                resultsContainer.style.display = 'none';
+            }
         }
     }
 
@@ -370,22 +388,32 @@ class PortfolioApp {
     }
 
     selectStock(symbol, name) {
-        // Find the active stock search input
-        const activeInput = document.querySelector('[data-stock-search]:focus, [data-stock-search].active');
+        // Find the stock search input that has visible results
+        const visibleResultsContainer = document.querySelector('.stock-search-results[style*="block"]');
+        if (!visibleResultsContainer) return;
+
+        const activeInput = visibleResultsContainer.parentElement.querySelector('[data-stock-search]');
         if (activeInput) {
             activeInput.value = symbol;
             activeInput.dataset.selectedSymbol = symbol;
             activeInput.dataset.selectedName = name;
 
             // Hide search results
-            const resultsContainer = activeInput.parentElement.querySelector('.stock-search-results');
-            if (resultsContainer) {
-                resultsContainer.style.display = 'none';
-            }
+            visibleResultsContainer.style.display = 'none';
 
             // Trigger change event
             activeInput.dispatchEvent(new Event('change'));
+
+            // Focus back on the input
+            activeInput.focus();
         }
+    }
+
+    hideAllStockSearchResults() {
+        const allResultsContainers = document.querySelectorAll('.stock-search-results');
+        allResultsContainers.forEach(container => {
+            container.style.display = 'none';
+        });
     }
 
     async showStockDetailModal(symbol) {
