@@ -120,6 +120,36 @@ class PortfolioApp {
             case 'change-chart-period':
                 this.changeChartPeriod(element.dataset.period);
                 break;
+            case 'edit-trade':
+                const tradeId = element.dataset.tradeId;
+                this.showEditTradeModal(tradeId);
+                break;
+            case 'delete-trade':
+                const tradeIdToDelete = element.dataset.tradeId;
+                this.confirmDeleteTrade(tradeIdToDelete);
+                break;
+            case 'view-holding-trades':
+                const symbol = element.dataset.symbol;
+                this.showHoldingTradesModal(symbol);
+                break;
+            case 'edit-holding':
+                const symbolToEdit = element.dataset.symbol;
+                this.showEditHoldingModal(symbolToEdit);
+                break;
+            case 'delete-holding':
+                const symbolToDelete = element.dataset.symbol;
+                this.confirmDeleteHolding(symbolToDelete);
+                break;
+            case 'confirm-delete-trade':
+                const tradeIdToConfirmDelete = element.dataset.tradeId;
+                const portfolioId = this.getCurrentPortfolioId();
+                this.deleteTrade(tradeIdToConfirmDelete, portfolioId);
+                break;
+            case 'confirm-delete-holding':
+                const symbolToConfirmDelete = element.dataset.symbol;
+                const portfolioIdForHolding = this.getCurrentPortfolioId();
+                this.deleteHolding(symbolToConfirmDelete, portfolioIdForHolding);
+                break;
         }
     }
     
@@ -142,6 +172,9 @@ class PortfolioApp {
                 break;
             case 'add-trade':
                 await this.addTrade(data);
+                break;
+            case 'edit-trade':
+                await this.updateTrade(data);
                 break;
         }
     }
@@ -310,6 +343,57 @@ class PortfolioApp {
         }
     }
 
+    async updateTrade(data) {
+        try {
+            this.showLoading('Updating trade...');
+
+            const response = await this.apiCall(`/portfolios/${data.portfolio_id}/transactions/${data.trade_id}`, {
+                method: 'PUT',
+                body: JSON.stringify({
+                    stock_symbol: data.stock_symbol.toUpperCase(),
+                    transaction_type: data.transaction_type,
+                    quantity: parseFloat(data.quantity),
+                    price: parseFloat(data.price),
+                    fees: parseFloat(data.fees || 0),
+                    transaction_date: data.transaction_date,
+                    notes: data.notes
+                })
+            });
+
+            if (response.success) {
+                this.showSuccess('Trade updated successfully!');
+                this.closeModal();
+                this.showPortfolioDetail(data.portfolio_id); // Refresh portfolio view
+            } else {
+                this.showError(response.error || 'Failed to update trade');
+            }
+        } catch (error) {
+            this.showError('Failed to update trade. Please try again.');
+            console.error('Update trade error:', error);
+        }
+    }
+
+    async deleteTrade(tradeId, portfolioId) {
+        try {
+            this.showLoading('Deleting trade...');
+
+            const response = await this.apiCall(`/portfolios/${portfolioId}/transactions/${tradeId}`, {
+                method: 'DELETE'
+            });
+
+            if (response.success) {
+                this.showSuccess('Trade deleted successfully!');
+                this.closeModal();
+                this.showPortfolioDetail(portfolioId); // Refresh portfolio view
+            } else {
+                this.showError(response.error || 'Failed to delete trade');
+            }
+        } catch (error) {
+            this.showError('Failed to delete trade. Please try again.');
+            console.error('Delete trade error:', error);
+        }
+    }
+
     async showTradeHistoryModal(portfolioId) {
         try {
             this.showLoading('Loading trade history...');
@@ -402,6 +486,76 @@ class PortfolioApp {
             // Focus back on the input
             activeInput.focus();
         }
+    }
+
+    async deleteHolding(symbol, portfolioId) {
+        try {
+            this.showLoading('Deleting all trades for ' + symbol + '...');
+
+            const response = await this.apiCall(`/portfolios/${portfolioId}/holdings/${symbol}`, {
+                method: 'DELETE'
+            });
+
+            if (response.success) {
+                this.showSuccess(`All ${symbol} trades deleted successfully!`);
+                this.closeModal();
+                this.showPortfolioDetail(portfolioId); // Refresh portfolio view
+            } else {
+                this.showError(response.error || 'Failed to delete holding');
+            }
+        } catch (error) {
+            this.showError('Failed to delete holding. Please try again.');
+            console.error('Delete holding error:', error);
+        }
+    }
+
+    async showEditTradeModal(tradeId) {
+        try {
+            this.showLoading('Loading trade details...');
+
+            // Get trade details
+            const response = await this.apiCall(`/transactions/${tradeId}`);
+            const trade = response.transaction;
+
+            this.showModal(this.getEditTradeModalHTML(trade));
+        } catch (error) {
+            this.showError('Failed to load trade details');
+            console.error('Edit trade error:', error);
+        }
+    }
+
+    confirmDeleteTrade(tradeId) {
+        this.showModal(this.getConfirmDeleteTradeModalHTML(tradeId));
+    }
+
+    async showHoldingTradesModal(symbol) {
+        try {
+            this.showLoading('Loading trades for ' + symbol + '...');
+
+            // Get current portfolio ID from URL or context
+            const portfolioId = this.getCurrentPortfolioId();
+            const response = await this.apiCall(`/portfolios/${portfolioId}/transactions?symbol=${symbol}`);
+
+            this.showModal(this.getHoldingTradesModalHTML(response.transactions || [], symbol, portfolioId));
+        } catch (error) {
+            this.showError('Failed to load holding trades');
+            console.error('Holding trades error:', error);
+        }
+    }
+
+    showEditHoldingModal(symbol) {
+        this.showModal(this.getEditHoldingModalHTML(symbol));
+    }
+
+    confirmDeleteHolding(symbol) {
+        this.showModal(this.getConfirmDeleteHoldingModalHTML(symbol));
+    }
+
+    getCurrentPortfolioId() {
+        // Extract portfolio ID from current context - this is a simplified approach
+        // In a real app, you'd store this in the app state
+        const portfolioElement = document.querySelector('[data-portfolio-id]');
+        return portfolioElement ? portfolioElement.dataset.portfolioId : null;
     }
 
     hideAllStockSearchResults() {
@@ -1300,13 +1454,229 @@ class PortfolioApp {
         `;
     }
 
+    getEditTradeModalHTML(trade) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 500px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Edit Trade</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <form data-form="edit-trade">
+                        <input type="hidden" name="trade_id" value="${trade.id}">
+                        <input type="hidden" name="portfolio_id" value="${trade.portfolio_id}">
+
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="edit_stock_symbol">Stock Symbol</label>
+                                <input type="text" id="edit_stock_symbol" name="stock_symbol" class="form-input" value="${trade.stock_symbol}" required readonly>
+                                <small class="text-muted">Stock symbol cannot be changed. Delete and create new trade if needed.</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit_transaction_type">Trade Type</label>
+                                <select id="edit_transaction_type" name="transaction_type" class="form-input" required>
+                                    <option value="buy" ${trade.transaction_type === 'buy' ? 'selected' : ''}>Buy</option>
+                                    <option value="sell" ${trade.transaction_type === 'sell' ? 'selected' : ''}>Sell</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4">
+                            <div class="form-group">
+                                <label class="form-label" for="edit_quantity">Shares</label>
+                                <input type="number" id="edit_quantity" name="quantity" class="form-input" step="0.000001" min="0.000001" value="${trade.quantity}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit_price">Price per Share</label>
+                                <input type="number" id="edit_price" name="price" class="form-input" step="0.01" min="0.01" value="${trade.price}" required>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label" for="edit_fees">Commission/Fees</label>
+                                <input type="number" id="edit_fees" name="fees" class="form-input" step="0.01" min="0" value="${trade.fees || 0}">
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit_transaction_date">Trade Date</label>
+                            <input type="date" id="edit_transaction_date" name="transaction_date" class="form-input" value="${trade.transaction_date}" required>
+                        </div>
+
+                        <div class="form-group">
+                            <label class="form-label" for="edit_notes">Notes (Optional)</label>
+                            <textarea id="edit_notes" name="notes" class="form-input" rows="2" placeholder="Any notes about this trade">${trade.notes || ''}</textarea>
+                        </div>
+
+                        <div class="flex gap-4">
+                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Update Trade</button>
+                            <button type="button" data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        `;
+    }
+
+    getConfirmDeleteTradeModalHTML(tradeId) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 400px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Delete Trade</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">⚠️</div>
+                        <h4>Are you sure?</h4>
+                        <p class="text-muted">This will permanently delete this trade and recalculate your holdings. This action cannot be undone.</p>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button data-action="confirm-delete-trade" data-trade-id="${tradeId}" class="btn btn-danger btn-lg" style="flex: 1;">Delete Trade</button>
+                        <button data-action="close-modal" class="btn btn-secondary btn-lg" style="flex: 1;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    getHoldingTradesModalHTML(transactions, symbol, portfolioId) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 700px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Trades for ${symbol}</h3>
+                        <div class="flex gap-2">
+                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary btn-sm">+ Add Trade</button>
+                            <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                        </div>
+                    </div>
+
+                    ${transactions.length === 0 ? `
+                        <div class="text-center py-8">
+                            <div style="font-size: 2rem; margin-bottom: var(--space-3); opacity: 0.3;">📈</div>
+                            <h4>No Trades for ${symbol}</h4>
+                            <p class="text-muted mb-4">Add your first trade for this stock.</p>
+                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">Add Trade</button>
+                        </div>
+                    ` : `
+                        <div style="max-height: 300px; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                                    <tr style="border-bottom: 2px solid var(--gray-200);">
+                                        <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Date</th>
+                                        <th style="text-align: center; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Type</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Shares</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Price</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Total</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${transactions.map(trade => {
+                                        const total = trade.quantity * trade.price;
+                                        const tradeDate = new Date(trade.transaction_date).toLocaleDateString();
+                                        const isBuy = trade.transaction_type === 'buy';
+
+                                        return `
+                                            <tr style="border-bottom: 1px solid var(--gray-100);">
+                                                <td style="padding: var(--space-3);">
+                                                    <div style="font-size: var(--font-size-sm);">${tradeDate}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: center;">
+                                                    <span class="badge ${isBuy ? 'badge-success' : 'badge-danger'}" style="text-transform: uppercase;">
+                                                        ${trade.transaction_type}
+                                                    </span>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div>${this.formatNumber(trade.quantity)}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div>$${this.formatNumber(trade.price)}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div style="font-weight: 600; color: ${isBuy ? 'var(--danger-red)' : 'var(--success-green)'};">
+                                                        ${isBuy ? '-' : '+'}$${this.formatNumber(total)}
+                                                    </div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div class="flex gap-2 justify-end">
+                                                        <button data-action="edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
+                                                        <button data-action="delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
+    }
+
+    getEditHoldingModalHTML(symbol) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 400px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Edit ${symbol} Holding</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <div style="font-size: 2rem; margin-bottom: var(--space-3);">📈</div>
+                        <h4>Manage Individual Trades</h4>
+                        <p class="text-muted">Holdings are calculated from your trades. Use the actions below to manage this position:</p>
+                    </div>
+
+                    <div class="flex flex-col gap-3">
+                        <button data-action="view-holding-trades" data-symbol="${symbol}" class="btn btn-primary btn-lg">View All ${symbol} Trades</button>
+                        <button data-action="show-add-trade" data-portfolio-id="${this.getCurrentPortfolioId()}" class="btn btn-secondary btn-lg">Add New ${symbol} Trade</button>
+                        <button data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
+    getConfirmDeleteHoldingModalHTML(symbol) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 400px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Delete ${symbol} Holding</h3>
+                        <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                    </div>
+
+                    <div class="text-center mb-6">
+                        <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">⚠️</div>
+                        <h4>Delete All ${symbol} Trades?</h4>
+                        <p class="text-muted">This will permanently delete ALL trades for ${symbol} and remove this holding from your portfolio. This action cannot be undone.</p>
+                    </div>
+
+                    <div class="flex gap-4">
+                        <button data-action="confirm-delete-holding" data-symbol="${symbol}" class="btn btn-danger btn-lg" style="flex: 1;">Delete All Trades</button>
+                        <button data-action="close-modal" class="btn btn-secondary btn-lg" style="flex: 1;">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     getPortfolioDetailHTML(portfolioData) {
         const portfolio = portfolioData.portfolio;
         const performance = portfolioData.performance;
         const holdings = portfolioData.holdings || [];
 
         return `
-            <div class="portfolio-detail">
+            <div class="portfolio-detail" data-portfolio-id="${portfolio.id}">
                 <!-- Header -->
                 <header style="background: white; border-bottom: 1px solid var(--gray-200); padding: var(--space-4) 0;">
                     <div class="container">
@@ -1420,6 +1790,7 @@ class PortfolioApp {
                             <th style="text-align: right;">Market Value</th>
                             <th style="text-align: right;">Gain/Loss</th>
                             <th style="text-align: right;">Weight</th>
+                            <th style="text-align: right;">Actions</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -1453,6 +1824,13 @@ class PortfolioApp {
                                 </td>
                                 <td style="text-align: right;">
                                     <div>${holding.weight.toFixed(1)}%</div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <div class="flex gap-2 justify-end">
+                                        <button data-action="view-holding-trades" data-symbol="${holding.symbol}" class="btn btn-secondary btn-sm" title="View Trades">📈</button>
+                                        <button data-action="edit-holding" data-symbol="${holding.symbol}" class="btn btn-secondary btn-sm" title="Edit Holding">✏️</button>
+                                        <button data-action="delete-holding" data-symbol="${holding.symbol}" class="btn btn-danger btn-sm" title="Delete All Trades">🗑️</button>
+                                    </div>
                                 </td>
                             </tr>
                         `).join('')}
@@ -1652,6 +2030,7 @@ class PortfolioApp {
                                         <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Price</th>
                                         <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Total</th>
                                         <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Fees</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Actions</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -1686,6 +2065,12 @@ class PortfolioApp {
                                                 </td>
                                                 <td style="padding: var(--space-3); text-align: right;">
                                                     <div style="color: var(--gray-600);">$${this.formatNumber(trade.fees || 0)}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div class="flex gap-2 justify-end">
+                                                        <button data-action="edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
+                                                        <button data-action="delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                         `;
