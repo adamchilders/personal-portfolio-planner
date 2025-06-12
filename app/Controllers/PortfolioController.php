@@ -210,7 +210,9 @@ class PortfolioController
         $user = $request->getAttribute('user');
         $portfolioId = (int)$args['id'];
         $data = $request->getParsedBody();
-        
+
+
+
         try {
             $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
             $transaction = $this->portfolioService->addTransaction($portfolio, $data);

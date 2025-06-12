@@ -275,7 +275,9 @@ class PortfolioService
     private function validateTransactionData(array $data): void
     {
         $required = ['stock_symbol', 'transaction_type', 'quantity', 'price', 'transaction_date'];
-        
+
+
+
         foreach ($required as $field) {
             if (!isset($data[$field]) || $data[$field] === '') {
                 throw new Exception("Field '{$field}' is required");

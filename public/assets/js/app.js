@@ -9,19 +9,24 @@ class PortfolioApp {
     }
     
     async init() {
+        console.log('App initializing...');
+        console.log('Auth token from localStorage:', this.authToken);
+
         // Check if user is logged in
         if (this.authToken) {
             try {
                 await this.getCurrentUser();
+                console.log('Current user:', this.currentUser);
                 this.showDashboard();
             } catch (error) {
                 console.error('Auth check failed:', error);
                 this.logout();
             }
         } else {
+            console.log('No auth token, showing homepage');
             this.showHomepage();
         }
-        
+
         this.setupEventListeners();
     }
     
@@ -265,17 +270,21 @@ class PortfolioApp {
         try {
             this.showLoading('Recording trade...');
 
+            const tradeData = {
+                stock_symbol: data.stock_symbol.toUpperCase(),
+                transaction_type: data.transaction_type,
+                quantity: parseFloat(data.quantity),
+                price: parseFloat(data.price),
+                fees: parseFloat(data.fees || 0),
+                transaction_date: data.transaction_date,
+                notes: data.notes
+            };
+
+            console.log('Sending trade data:', tradeData);
+
             const response = await this.apiCall(`/portfolios/${data.portfolio_id}/transactions`, {
                 method: 'POST',
-                body: JSON.stringify({
-                    stock_symbol: data.stock_symbol.toUpperCase(),
-                    transaction_type: data.transaction_type,
-                    quantity: parseFloat(data.quantity),
-                    price: parseFloat(data.price),
-                    fees: parseFloat(data.fees || 0),
-                    transaction_date: data.transaction_date,
-                    notes: data.notes
-                })
+                body: JSON.stringify(tradeData)
             });
 
             if (response.success) {
@@ -463,7 +472,18 @@ class PortfolioApp {
         const response = await fetch(url, { ...defaultOptions, ...options });
 
         if (!response.ok) {
-            throw new Error(`HTTP error! status: ${response.status}`);
+            // Try to get error details from response
+            let errorMessage = `HTTP error! status: ${response.status}`;
+            try {
+                const errorData = await response.json();
+                if (errorData.error) {
+                    errorMessage = errorData.error;
+                }
+            } catch (e) {
+                // If we can't parse JSON, use the status text
+                errorMessage = response.statusText || errorMessage;
+            }
+            throw new Error(errorMessage);
         }
 
         return await response.json();
@@ -523,9 +543,11 @@ class PortfolioApp {
 
     async showPortfolioDetail(portfolioId) {
         try {
+            console.log('Loading portfolio details for ID:', portfolioId);
             this.showLoading('Loading portfolio details...');
 
             const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
+            console.log('Portfolio data received:', portfolio);
             document.getElementById('app').innerHTML = this.getPortfolioDetailHTML(portfolio);
 
             // Initialize charts after DOM is ready
