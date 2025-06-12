@@ -83,9 +83,13 @@ class PortfolioApp {
                 const portfolioIdForHolding = element.dataset.portfolioId;
                 this.showAddHoldingModal(portfolioIdForHolding);
                 break;
-            case 'show-add-transaction':
-                const portfolioIdForTransaction = element.dataset.portfolioId;
-                this.showAddTransactionModal(portfolioIdForTransaction);
+            case 'show-add-trade':
+                const portfolioIdForTrade = element.dataset.portfolioId;
+                this.showAddTradeModal(portfolioIdForTrade);
+                break;
+            case 'show-trade-history':
+                const portfolioIdForHistory = element.dataset.portfolioId;
+                this.showTradeHistoryModal(portfolioIdForHistory);
                 break;
             case 'show-stock-detail':
                 const symbol = element.dataset.symbol;
@@ -121,8 +125,8 @@ class PortfolioApp {
             case 'add-holding':
                 await this.addHolding(data);
                 break;
-            case 'add-transaction':
-                await this.addTransaction(data);
+            case 'add-trade':
+                await this.addTrade(data);
                 break;
         }
     }
@@ -257,9 +261,9 @@ class PortfolioApp {
         }
     }
 
-    async addTransaction(data) {
+    async addTrade(data) {
         try {
-            this.showLoading('Recording transaction...');
+            this.showLoading('Recording trade...');
 
             const response = await this.apiCall(`/portfolios/${data.portfolio_id}/transactions`, {
                 method: 'POST',
@@ -275,15 +279,27 @@ class PortfolioApp {
             });
 
             if (response.success) {
-                this.showSuccess('Transaction recorded successfully!');
+                this.showSuccess(`${data.transaction_type === 'buy' ? 'Buy' : 'Sell'} trade recorded successfully!`);
                 this.closeModal();
                 this.showPortfolioDetail(data.portfolio_id); // Refresh portfolio view
             } else {
-                this.showError(response.error || 'Failed to record transaction');
+                this.showError(response.error || 'Failed to record trade');
             }
         } catch (error) {
-            this.showError('Failed to record transaction. Please try again.');
-            console.error('Add transaction error:', error);
+            this.showError('Failed to record trade. Please try again.');
+            console.error('Add trade error:', error);
+        }
+    }
+
+    async showTradeHistoryModal(portfolioId) {
+        try {
+            this.showLoading('Loading trade history...');
+
+            const response = await this.apiCall(`/portfolios/${portfolioId}/transactions`);
+            this.showModal(this.getTradeHistoryModalHTML(response.transactions || [], portfolioId));
+        } catch (error) {
+            this.showError('Failed to load trade history');
+            console.error('Trade history error:', error);
         }
     }
 
@@ -621,8 +637,8 @@ class PortfolioApp {
         this.showModal(this.getAddHoldingModalHTML(portfolioId));
     }
 
-    showAddTransactionModal(portfolioId) {
-        this.showModal(this.getAddTransactionModalHTML(portfolioId));
+    showAddTradeModal(portfolioId) {
+        this.showModal(this.getAddTradeModalHTML(portfolioId));
     }
 
     showModal(content) {
@@ -1166,18 +1182,18 @@ class PortfolioApp {
         `;
     }
 
-    getAddTransactionModalHTML(portfolioId) {
+    getAddTradeModalHTML(portfolioId) {
         const today = new Date().toISOString().split('T')[0];
 
         return `
             <div class="modal-content">
                 <div class="card card-lg" style="max-width: 500px; margin: 0 auto;">
                     <div class="flex justify-between items-center mb-6">
-                        <h3 style="margin-bottom: 0;">Record Transaction</h3>
+                        <h3 style="margin-bottom: 0;">Record Trade</h3>
                         <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
                     </div>
 
-                    <form data-form="add-transaction">
+                    <form data-form="add-trade">
                         <input type="hidden" name="portfolio_id" value="${portfolioId}">
 
                         <div class="grid grid-cols-2 gap-4">
@@ -1190,46 +1206,49 @@ class PortfolioApp {
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label" for="transaction_type">Transaction Type</label>
+                                <label class="form-label" for="transaction_type">Trade Type</label>
                                 <select id="transaction_type" name="transaction_type" class="form-input" required>
                                     <option value="buy">Buy</option>
                                     <option value="sell">Sell</option>
-                                    <option value="dividend">Dividend</option>
-                                    <option value="transfer_in">Transfer In</option>
-                                    <option value="transfer_out">Transfer Out</option>
                                 </select>
                             </div>
                         </div>
 
                         <div class="grid grid-cols-3 gap-4">
                             <div class="form-group">
-                                <label class="form-label" for="quantity">Quantity</label>
-                                <input type="number" id="quantity" name="quantity" class="form-input" step="0.000001" min="0" placeholder="10" required>
+                                <label class="form-label" for="quantity">Shares</label>
+                                <input type="number" id="quantity" name="quantity" class="form-input" step="0.000001" min="0.000001" placeholder="10" required>
                             </div>
 
                             <div class="form-group">
                                 <label class="form-label" for="price">Price per Share</label>
-                                <input type="number" id="price" name="price" class="form-input" step="0.01" min="0" placeholder="150.00" required>
+                                <input type="number" id="price" name="price" class="form-input" step="0.01" min="0.01" placeholder="150.00" required>
                             </div>
 
                             <div class="form-group">
-                                <label class="form-label" for="fees">Fees</label>
+                                <label class="form-label" for="fees">Commission/Fees</label>
                                 <input type="number" id="fees" name="fees" class="form-input" step="0.01" min="0" placeholder="0.00" value="0">
                             </div>
                         </div>
 
                         <div class="form-group">
-                            <label class="form-label" for="transaction_date">Transaction Date</label>
+                            <label class="form-label" for="transaction_date">Trade Date</label>
                             <input type="date" id="transaction_date" name="transaction_date" class="form-input" value="${today}" required>
                         </div>
 
                         <div class="form-group">
                             <label class="form-label" for="notes">Notes (Optional)</label>
-                            <textarea id="notes" name="notes" class="form-input" rows="2" placeholder="Any additional notes about this transaction"></textarea>
+                            <textarea id="notes" name="notes" class="form-input" rows="2" placeholder="Any notes about this trade (e.g., strategy, market conditions)"></textarea>
+                        </div>
+
+                        <div class="alert alert-info mb-4" style="background: var(--primary-blue-bg); border: 1px solid var(--primary-blue-light); border-radius: var(--radius-md); padding: var(--space-3);">
+                            <small style="color: var(--primary-blue);">
+                                💡 <strong>Trade-based tracking:</strong> Your holdings are automatically calculated from all your buy/sell trades using FIFO cost basis.
+                            </small>
                         </div>
 
                         <div class="flex gap-4">
-                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Record Transaction</button>
+                            <button type="submit" class="btn btn-primary btn-lg" style="flex: 1;">Record Trade</button>
                             <button type="button" data-action="close-modal" class="btn btn-secondary btn-lg">Cancel</button>
                         </div>
                     </form>
@@ -1261,8 +1280,8 @@ class PortfolioApp {
                                 <button data-action="refresh-portfolio" data-portfolio-id="${portfolio.id}" class="btn btn-secondary" title="Refresh stock prices">
                                     🔄 Refresh
                                 </button>
-                                <button data-action="show-add-holding" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Holding</button>
-                                <button data-action="show-add-transaction" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">+ Add Transaction</button>
+                                <button data-action="show-add-trade" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Trade</button>
+                                <button data-action="show-trade-history" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">📈 Trade History</button>
                             </div>
                         </div>
                     </div>
@@ -1314,9 +1333,9 @@ class PortfolioApp {
                     <div class="container">
                         <div class="card">
                             <div class="flex justify-between items-center mb-6">
-                                <h3 style="margin-bottom: 0;">Holdings</h3>
+                                <h3 style="margin-bottom: 0;">Current Holdings</h3>
                                 <div class="text-muted" style="font-size: var(--font-size-sm);">
-                                    ${holdings.length} holdings
+                                    ${holdings.length} positions • Computed from trades
                                 </div>
                             </div>
 
@@ -1332,11 +1351,14 @@ class PortfolioApp {
         return `
             <div class="text-center py-12">
                 <div style="width: 48px; height: 48px; background: var(--gray-100); border-radius: var(--radius-full); margin: 0 auto var(--space-4); display: flex; align-items: center; justify-content: center;">
-                    <span style="color: var(--gray-400); font-size: 1.5rem;">📊</span>
+                    <span style="color: var(--gray-400); font-size: 1.5rem;">📈</span>
                 </div>
-                <h4>No Holdings Yet</h4>
-                <p class="text-muted mb-6">Add your first stock holding to start tracking this portfolio.</p>
-                <button data-action="show-add-holding" data-portfolio-id="${portfolioId}" class="btn btn-primary">Add Your First Holding</button>
+                <h4>No Trades Yet</h4>
+                <p class="text-muted mb-6">Record your first buy or sell trade to start building this portfolio.</p>
+                <div class="flex gap-4 justify-center">
+                    <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">Record Your First Trade</button>
+                    <button data-action="show-trade-history" data-portfolio-id="${portfolioId}" class="btn btn-secondary">View Trade History</button>
+                </div>
             </div>
         `;
     }
@@ -1554,6 +1576,107 @@ class PortfolioApp {
         const concentrationPenalty = maxWeight > 50 ? (maxWeight - 50) : 0; // Penalty for concentration
 
         return Math.max(0, Math.min(100, baseScore - concentrationPenalty));
+    }
+
+    getTradeHistoryModalHTML(transactions, portfolioId) {
+        return `
+            <div class="modal-content">
+                <div class="card card-lg" style="max-width: 800px; margin: 0 auto;">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 style="margin-bottom: 0;">Trade History</h3>
+                        <div class="flex gap-2">
+                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary btn-sm">+ Add Trade</button>
+                            <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+                        </div>
+                    </div>
+
+                    ${transactions.length === 0 ? `
+                        <div class="text-center py-8">
+                            <div style="font-size: 2rem; margin-bottom: var(--space-3); opacity: 0.3;">📈</div>
+                            <h4>No Trades Yet</h4>
+                            <p class="text-muted mb-4">Start by recording your first buy or sell trade.</p>
+                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">Record First Trade</button>
+                        </div>
+                    ` : `
+                        <div style="max-height: 400px; overflow-y: auto;">
+                            <table style="width: 100%; border-collapse: collapse;">
+                                <thead style="position: sticky; top: 0; background: white; z-index: 1;">
+                                    <tr style="border-bottom: 2px solid var(--gray-200);">
+                                        <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Date</th>
+                                        <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Symbol</th>
+                                        <th style="text-align: center; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Type</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Shares</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Price</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Total</th>
+                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Fees</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${transactions.map(trade => {
+                                        const total = trade.quantity * trade.price;
+                                        const tradeDate = new Date(trade.transaction_date).toLocaleDateString();
+                                        const isBuy = trade.transaction_type === 'buy';
+
+                                        return `
+                                            <tr style="border-bottom: 1px solid var(--gray-100);">
+                                                <td style="padding: var(--space-3);">
+                                                    <div style="font-size: var(--font-size-sm);">${tradeDate}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3);">
+                                                    <div style="font-weight: 600; color: var(--primary-blue);">${trade.stock_symbol}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: center;">
+                                                    <span class="badge ${isBuy ? 'badge-success' : 'badge-danger'}" style="text-transform: uppercase;">
+                                                        ${trade.transaction_type}
+                                                    </span>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div>${this.formatNumber(trade.quantity)}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div>$${this.formatNumber(trade.price)}</div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div style="font-weight: 600; color: ${isBuy ? 'var(--danger-red)' : 'var(--success-green)'};">
+                                                        ${isBuy ? '-' : '+'}$${this.formatNumber(total)}
+                                                    </div>
+                                                </td>
+                                                <td style="padding: var(--space-3); text-align: right;">
+                                                    <div style="color: var(--gray-600);">$${this.formatNumber(trade.fees || 0)}</div>
+                                                </td>
+                                            </tr>
+                                        `;
+                                    }).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <div class="mt-4 pt-4" style="border-top: 1px solid var(--gray-200);">
+                            <div class="grid grid-cols-3 gap-4 text-center">
+                                <div>
+                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--success-green);">
+                                        ${transactions.filter(t => t.transaction_type === 'buy').length}
+                                    </div>
+                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Buy Trades</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--danger-red);">
+                                        ${transactions.filter(t => t.transaction_type === 'sell').length}
+                                    </div>
+                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Sell Trades</div>
+                                </div>
+                                <div>
+                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--gray-800);">
+                                        ${transactions.length}
+                                    </div>
+                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Total Trades</div>
+                                </div>
+                            </div>
+                        </div>
+                    `}
+                </div>
+            </div>
+        `;
     }
 
     getStockDetailModalHTML(stockData) {

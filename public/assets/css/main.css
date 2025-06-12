@@ -437,6 +437,37 @@ table tbody tr:hover {
     color: var(--warning-yellow);
 }
 
+/* Trade History Enhancements */
+.trade-history-table {
+    border-collapse: collapse;
+    width: 100%;
+}
+
+.trade-history-table th {
+    position: sticky;
+    top: 0;
+    background: white;
+    z-index: 1;
+    border-bottom: 2px solid var(--gray-200);
+}
+
+.trade-history-table tbody tr:hover {
+    background-color: var(--gray-50);
+}
+
+/* Alert Styles */
+.alert {
+    padding: var(--space-3);
+    border-radius: var(--radius-md);
+    margin-bottom: var(--space-4);
+}
+
+.alert-info {
+    background-color: var(--primary-blue-bg);
+    border: 1px solid var(--primary-blue-light);
+    color: var(--primary-blue);
+}
+
 /* Enhanced Button States */
 .btn:disabled {
     opacity: 0.5;
