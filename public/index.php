@@ -11,9 +11,14 @@ define('ROOT_PATH', dirname(__DIR__));
 // Require the autoloader
 require ROOT_PATH . '/vendor/autoload.php';
 
-// Load environment variables
+// Load environment variables (optional in Kubernetes)
 $dotenv = Dotenv\Dotenv::createImmutable(ROOT_PATH);
-$dotenv->load();
+try {
+    $dotenv->load();
+} catch (Dotenv\Exception\InvalidPathException $e) {
+    // .env file not found - this is OK in Kubernetes where env vars come from secrets/configmaps
+    // Continue without loading .env file
+}
 
 // Create container
 $container = new Container();
