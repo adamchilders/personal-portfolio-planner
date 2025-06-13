@@ -123,4 +123,3 @@ spec:
             name: portfolio-tracker-app-service
             port:
               number: 80
-</apiVersion>
