@@ -1,0 +1,217 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-tracker-app
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-tracker
+      component: app
+  template:
+    metadata:
+      labels:
+        app: portfolio-tracker
+        component: app
+    spec:
+      containers:
+      - name: app
+        image: portfolio-tracker:latest
+        ports:
+        - containerPort: 9000
+          name: php-fpm
+        env:
+        - name: DB_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: db-host
+        - name: DB_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: db-port
+        - name: DB_DATABASE
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: db-database
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-password
+        - name: REDIS_HOST
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: redis-host
+        - name: REDIS_PORT
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: redis-port
+        - name: REDIS_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: redis-password
+        - name: APP_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: app-env
+        - name: APP_DEBUG
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: app-debug
+        - name: APP_KEY
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: app-key
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: jwt-secret
+        - name: APP_NAME
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: app-name
+        - name: APP_TIMEZONE
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: app-timezone
+        volumeMounts:
+        - name: storage-logs
+          mountPath: /var/www/html/storage/logs
+        - name: storage-cache
+          mountPath: /var/www/html/storage/cache
+        - name: storage-sessions
+          mountPath: /var/www/html/storage/sessions
+        livenessProbe:
+          exec:
+            command:
+            - php
+            - /var/www/html/public/health.php
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - php
+            - /var/www/html/public/health.php
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: storage-logs
+        emptyDir: {}
+      - name: storage-cache
+        emptyDir: {}
+      - name: storage-sessions
+        emptyDir: {}
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-tracker-app-service
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  selector:
+    app: portfolio-tracker
+    component: app
+  ports:
+  - port: 9000
+    targetPort: 9000
+    name: php-fpm
+  type: ClusterIP
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-tracker-nginx
+  labels:
+    app: portfolio-tracker
+    component: nginx
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-tracker
+      component: nginx
+  template:
+    metadata:
+      labels:
+        app: portfolio-tracker
+        component: nginx
+    spec:
+      containers:
+      - name: nginx
+        image: nginx:alpine
+        ports:
+        - containerPort: 80
+          name: http
+        volumeMounts:
+        - name: nginx-config
+          mountPath: /etc/nginx/conf.d
+        - name: app-public
+          mountPath: /var/www/html/public
+          readOnly: true
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      volumes:
+      - name: nginx-config
+        configMap:
+          name: nginx-config
+      - name: app-public
+        emptyDir: {}
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-tracker-nginx-service
+  labels:
+    app: portfolio-tracker
+    component: nginx
+spec:
+  selector:
+    app: portfolio-tracker
+    component: nginx
+  ports:
+  - port: 80
+    targetPort: 80
+    name: http
+  type: LoadBalancer

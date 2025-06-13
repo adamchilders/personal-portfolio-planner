@@ -104,3 +104,15 @@ jspm_packages/
 
 # Yarn Integrity file
 .yarn-integrity
+
+# Rancher/Kubernetes secrets (NEVER commit actual secrets)
+rancher/secrets.yaml
+k8s/secrets.yaml
+kubernetes/secrets.yaml
+
+# Docker Compose files (removed for Rancher deployment)
+docker-compose*.yml
+
+# Deployment scripts (removed for Rancher deployment)
+bin/deploy.sh
+bin/validate-deployment.sh

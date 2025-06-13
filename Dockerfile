@@ -19,9 +19,8 @@ RUN apt-get update && apt-get install -y \
     libssl-dev \
     libcurl4-openssl-dev \
     pkg-config \
-    cron \
-    supervisor \
     libicu-dev \
+    redis-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure and install GD extension first
@@ -49,9 +48,6 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 COPY docker/php/php.ini /usr/local/etc/php/conf.d/custom.ini
 COPY docker/php/opcache.ini /usr/local/etc/php/conf.d/opcache.ini
 
-# Copy supervisor configuration
-COPY docker/supervisor/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
-
 # Create application user
 RUN groupadd -g 1000 www \
     && useradd -u 1000 -ms /bin/bash -g www www
@@ -59,30 +55,31 @@ RUN groupadd -g 1000 www \
 # Copy application code
 COPY . /var/www/html
 
-# Set permissions
-RUN chown -R www:www /var/www/html \
-    && chmod -R 755 /var/www/html/storage \
-    && chmod -R 755 /var/www/html/bootstrap/cache
+# Make scripts executable
+RUN chmod +x /var/www/html/bin/startup.sh \
+    && chmod +x /var/www/html/bin/install.php \
+    && chmod +x /var/www/html/bin/migrate.php
 
 # Install PHP dependencies
 RUN composer install --no-dev --optimize-autoloader --no-interaction
 
-# Create required directories
+# Create required directories and set permissions
 RUN mkdir -p /var/www/html/storage/logs \
     && mkdir -p /var/www/html/storage/cache \
     && mkdir -p /var/www/html/storage/sessions \
-    && mkdir -p /var/www/html/bootstrap/cache
-
-# Set final permissions
-RUN chown -R www:www /var/www/html \
+    && mkdir -p /var/www/html/bootstrap/cache \
+    && chown -R www:www /var/www/html \
     && chmod -R 755 /var/www/html/storage \
     && chmod -R 755 /var/www/html/bootstrap/cache
 
-# Switch to non-root user
+# Switch to non-root user for security
 USER www
 
 # Expose port 9000 for PHP-FPM
 EXPOSE 9000
 
-# Start PHP-FPM
+# Use startup script as entrypoint for initialization
+ENTRYPOINT ["/var/www/html/bin/startup.sh"]
+
+# Default command
 CMD ["php-fpm"]

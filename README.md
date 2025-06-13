@@ -26,10 +26,13 @@ A comprehensive stock portfolio tracking application built with PHP 8.4, designe
 
 ### Prerequisites
 
-- Docker and Docker Compose installed
-- Git (for version control)
+- Rancher/Kubernetes cluster
+- MySQL database service
+- Redis service
+- Container registry access
+- Docker for building images
 
-### Installation
+### Rancher Deployment
 
 1. Clone the repository:
 ```bash
@@ -37,33 +40,42 @@ git clone <repository-url>
 cd personal-portfolio-planner
 ```
 
-2. Copy environment configuration:
+2. Build and push the application image:
 ```bash
-cp .env.example .env
+docker build -t your-registry/portfolio-tracker:latest .
+docker push your-registry/portfolio-tracker:latest
 ```
 
-3. Edit `.env` file with your configuration:
+3. Configure and deploy to Rancher:
 ```bash
-nano .env
+# Configure secrets and settings
+kubectl create secret generic portfolio-secrets \
+  --from-literal=db-username=portfolio_user \
+  --from-literal=db-password="your_secure_password" \
+  --from-literal=app-key="$(openssl rand -base64 32)" \
+  --from-literal=jwt-secret="$(openssl rand -hex 64)"
+
+# Deploy application
+kubectl apply -f rancher/configmap.yaml
+kubectl apply -f rancher/deployment.yaml
 ```
 
-4. Start the application:
-```bash
-docker-compose up -d
-```
-
-5. Run database migrations:
-```bash
-docker-compose exec app php bin/migrate.php
-```
-
-6. Access the application:
-- Web Interface: http://localhost
-- Admin Interface: http://localhost/admin
+4. Access the application:
+- Web Interface: http://your-rancher-service
+- Admin Interface: http://your-rancher-service/admin
 
 ### Default Credentials
 
-On first run, the application will prompt you to create an admin user through the welcome screen.
+The installation automatically creates a default admin user:
+- **Username**: `admin`
+- **Email**: `admin@portfolio-tracker.local`
+- **Password**: `admin123`
+
+**⚠️ Important**: Change these credentials immediately after first login!
+
+### Local Development
+
+For local development with Docker Compose, see [DEVELOPMENT.md](DEVELOPMENT.md).
 
 ## Configuration
 
@@ -134,14 +146,37 @@ docker-compose exec app vendor/bin/phpunit
 
 ## Deployment
 
-### Production Deployment
+### Rancher/Kubernetes Deployment
 
-1. Set up production environment variables
-2. Configure SSL certificates
-3. Set up automated backups
-4. Configure monitoring and health checks
+The application is designed for cloud-native deployment with:
 
-See [DEPLOYMENT.md](DEPLOYMENT.md) for detailed deployment instructions.
+- **Kubernetes-native configuration** with ConfigMaps and Secrets
+- **Automatic database setup** when database is empty
+- **Built-in migration system** for schema updates
+- **Health checks** and readiness probes
+- **Horizontal scaling** support
+- **Production-ready configurations** for PHP 8.4
+
+**Rancher Deployment:**
+```bash
+# Build and push image
+docker build -t your-registry/portfolio-tracker:latest .
+docker push your-registry/portfolio-tracker:latest
+
+# Deploy to Rancher
+kubectl apply -f rancher/configmap.yaml
+kubectl apply -f rancher/deployment.yaml
+```
+
+**Key Features:**
+- Cloud-native architecture
+- Automatic database initialization and migration
+- Default admin user creation
+- Kubernetes health monitoring
+- Horizontal pod autoscaling ready
+- ConfigMap and Secret management
+
+See [rancher/README.md](rancher/README.md) for detailed Rancher deployment instructions.
 
 ## API Documentation
 

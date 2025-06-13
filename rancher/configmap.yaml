@@ -1,0 +1,129 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: portfolio-config
+  labels:
+    app: portfolio-tracker
+data:
+  # Database Configuration
+  db-host: "mysql-service"
+  db-port: "3306"
+  db-database: "portfolio_tracker"
+  
+  # Redis Configuration
+  redis-host: "redis-service"
+  redis-port: "6379"
+  
+  # Application Configuration
+  app-env: "production"
+  app-debug: "false"
+  app-name: "Personal Portfolio Tracker"
+  app-timezone: "America/New_York"
+  
+  # Market Configuration
+  market-hours-start: "09:30"
+  market-hours-end: "16:00"
+  market-timezone: "America/New_York"
+  
+  # API Configuration
+  default-fetch-interval: "900"
+  api-rate-limit: "60"
+  
+  # Feature Flags
+  backup-enabled: "true"
+  health-check-enabled: "true"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nginx-config
+  labels:
+    app: portfolio-tracker
+    component: nginx
+data:
+  default.conf: |
+    server {
+        listen 80;
+        listen [::]:80;
+        server_name _;
+        root /var/www/html/public;
+        index index.php index.html index.htm;
+
+        # Security headers
+        add_header X-Frame-Options "SAMEORIGIN" always;
+        add_header X-XSS-Protection "1; mode=block" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "no-referrer-when-downgrade" always;
+        add_header Content-Security-Policy "default-src 'self' http: https: data: blob: 'unsafe-inline'" always;
+
+        # Gzip compression
+        gzip on;
+        gzip_vary on;
+        gzip_min_length 1024;
+        gzip_proxied expired no-cache no-store private must-revalidate auth;
+        gzip_types text/plain text/css text/xml text/javascript application/x-javascript application/xml+rss;
+
+        # Handle static files
+        location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2|ttf|eot)$ {
+            expires 1y;
+            add_header Cache-Control "public, immutable";
+            try_files $uri =404;
+        }
+
+        # Main location block
+        location / {
+            try_files $uri $uri/ /index.php?$query_string;
+        }
+
+        # PHP-FPM configuration
+        location ~ \.php$ {
+            try_files $uri =404;
+            fastcgi_split_path_info ^(.+\.php)(/.+)$;
+            fastcgi_pass portfolio-tracker-app-service:9000;
+            fastcgi_index index.php;
+            include fastcgi_params;
+            fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+            fastcgi_param PATH_INFO $fastcgi_path_info;
+            
+            # Increase timeouts for long-running requests
+            fastcgi_read_timeout 300;
+            fastcgi_send_timeout 300;
+            fastcgi_connect_timeout 300;
+        }
+
+        # Health check endpoint
+        location /health {
+            access_log off;
+            try_files $uri /health.php;
+        }
+        
+        # Simple health check for load balancers
+        location /ping {
+            access_log off;
+            return 200 "pong\n";
+            add_header Content-Type text/plain;
+        }
+
+        # Deny access to hidden files
+        location ~ /\. {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+
+        # Deny access to sensitive files
+        location ~* \.(env|log|sql|conf)$ {
+            deny all;
+            access_log off;
+            log_not_found off;
+        }
+
+        # Error pages
+        error_page 404 /404.html;
+        error_page 500 502 503 504 /50x.html;
+
+        # Logging
+        access_log /var/log/nginx/access.log;
+        error_log /var/log/nginx/error.log;
+    }
