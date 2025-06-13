@@ -1,5 +1,5 @@
 # Development Dockerfile with additional tools
-FROM php:8.4-fpm
+FROM php:8.4-apache
 
 # Set working directory
 WORKDIR /var/www/html
@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y \
     nano \
     htop \
     libicu-dev \
+    && a2enmod rewrite \
+    && a2enmod headers \
     && rm -rf /var/lib/apt/lists/*
 
 # Configure and install GD extension first
@@ -63,11 +65,15 @@ RUN groupadd -g 1000 www \
 # Set permissions for development
 RUN chown -R www:www /var/www/html
 
-# Switch to non-root user
-USER www
+# Copy Apache configuration
+COPY docker/apache/000-default.conf /etc/apache2/sites-available/000-default.conf
 
-# Expose port 9000 for PHP-FPM
-EXPOSE 9000
+# Set permissions for development
+RUN chown -R www-data:www-data /var/www/html \
+    && chmod -R 755 /var/www/html
 
-# Start PHP-FPM
-CMD ["php-fpm"]
+# Expose port 80 for Apache
+EXPOSE 80
+
+# Start Apache
+CMD ["apache2-foreground"]

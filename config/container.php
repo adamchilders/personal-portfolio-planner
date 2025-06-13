@@ -23,28 +23,6 @@ use Slim\Psr7\Factory\ResponseFactory;
 // Database configuration
 $container->set('database', function () {
     $capsule = new Capsule;
-    
-    $capsule->addConnection([
-        'driver' => $_ENV['DB_CONNECTION'] ?? 'mysql',
-        'host' => $_ENV['DB_HOST'] ?? 'mysql',
-        'port' => $_ENV['DB_PORT'] ?? '3306',
-        'database' => $_ENV['DB_DATABASE'] ?? 'portfolio_tracker',
-        'username' => $_ENV['DB_USERNAME'] ?? 'portfolio_user',
-        'password' => $_ENV['DB_PASSWORD'] ?? 'password',
-        'charset' => 'utf8mb4',
-        'collation' => 'utf8mb4_unicode_ci',
-        'prefix' => '',
-    ]);
-    
-    $capsule->setAsGlobal();
-    $capsule->bootEloquent();
-    
-    return $capsule;
-});
-
-// Database configuration
-$container->set('database', function () {
-    $capsule = new Capsule;
 
     $capsule->addConnection([
         'driver' => $_ENV['DB_CONNECTION'] ?? 'mysql',
@@ -52,7 +30,7 @@ $container->set('database', function () {
         'port' => $_ENV['DB_PORT'] ?? '3306',
         'database' => $_ENV['DB_DATABASE'] ?? 'portfolio_tracker',
         'username' => $_ENV['DB_USERNAME'] ?? 'portfolio_user',
-        'password' => $_ENV['DB_PASSWORD'] ?? 'password',
+        'password' => $_ENV['DB_PASSWORD'] ?? 'portfolio_password',
         'charset' => 'utf8mb4',
         'collation' => 'utf8mb4_unicode_ci',
         'prefix' => '',
