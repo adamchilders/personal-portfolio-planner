@@ -5,9 +5,9 @@ metadata:
   namespace: portfolio-tracker
   annotations:
     # Nginx ingress controller annotations
+    kubernetes.io/ingress.class: nginx
     nginx.ingress.kubernetes.io/rewrite-target: /
-    nginx.ingress.kubernetes.io/ssl-redirect: "true"
-    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
     
     # Enable large file uploads for portfolio data
     nginx.ingress.kubernetes.io/proxy-body-size: "50m"
