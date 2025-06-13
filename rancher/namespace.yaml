@@ -39,6 +39,7 @@ spec:
   - Ingress
   - Egress
   ingress:
+  # Allow traffic from within the same namespace
   - from:
     - namespaceSelector:
         matchLabels:
@@ -46,5 +47,23 @@ spec:
     - podSelector:
         matchLabels:
           app: portfolio-tracker
+  # Allow traffic from ingress controllers (common namespaces and labels)
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: kube-system
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ingress-nginx
+  # Allow traffic from any pod with ingress controller labels
+  - from:
+    - podSelector:
+        matchLabels:
+          app: ingress-nginx
   egress:
   - {} # Allow all egress traffic (for database, redis, external APIs)
