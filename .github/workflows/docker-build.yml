@@ -1,0 +1,176 @@
+name: Multi-Architecture Docker Build
+
+on:
+  push:
+    branches: [ main, develop ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version tag (e.g., v1.0.3)'
+        required: false
+        type: string
+      push_latest:
+        description: 'Tag as latest'
+        required: false
+        type: boolean
+        default: true
+
+env:
+  REGISTRY: docker.io
+  IMAGE_NAME: adamchilders/portfolio-tracker
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+      with:
+        platforms: linux/amd64,linux/arm64
+
+    - name: Log in to Docker Hub
+      if: github.event_name != 'pull_request'
+      uses: docker/login-action@v3
+      with:
+        registry: ${{ env.REGISTRY }}
+        username: ${{ secrets.DOCKER_USERNAME }}
+        password: ${{ secrets.DOCKER_PASSWORD }}
+
+    - name: Extract metadata
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        images: ${{ env.IMAGE_NAME }}
+        tags: |
+          type=ref,event=branch
+          type=ref,event=pr
+          type=semver,pattern={{version}}
+          type=semver,pattern={{major}}.{{minor}}
+          type=semver,pattern={{major}}
+          type=raw,value=latest,enable={{is_default_branch}}
+          type=sha,prefix={{branch}}-
+
+    - name: Determine version
+      id: version
+      run: |
+        if [ "${{ github.event.inputs.version }}" != "" ]; then
+          echo "version=${{ github.event.inputs.version }}" >> $GITHUB_OUTPUT
+        elif [[ $GITHUB_REF == refs/tags/* ]]; then
+          echo "version=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+        else
+          # Auto-generate version for non-tag builds
+          git_hash=$(git rev-parse --short HEAD)
+          timestamp=$(date +%Y%m%d-%H%M%S)
+          echo "version=v1.0.3-${timestamp}-${git_hash}" >> $GITHUB_OUTPUT
+        fi
+
+    - name: Build and push Docker image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        platforms: linux/amd64,linux/arm64
+        push: ${{ github.event_name != 'pull_request' }}
+        tags: |
+          ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+          ${{ github.event.inputs.push_latest == 'true' && format('{0}:latest', env.IMAGE_NAME) || '' }}
+        labels: ${{ steps.meta.outputs.labels }}
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+
+    - name: Verify multi-architecture manifest
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "🔍 Verifying multi-architecture manifest..."
+        docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}
+        
+        echo "📋 Checking for both architectures..."
+        manifest=$(docker buildx imagetools inspect ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }})
+        
+        if echo "$manifest" | grep -q "linux/amd64" && echo "$manifest" | grep -q "linux/arm64"; then
+          echo "✅ Multi-architecture build verified!"
+          echo "📦 Available architectures:"
+          echo "$manifest" | grep -E "(Platform:|Digest:)"
+        else
+          echo "❌ Multi-architecture verification failed"
+          exit 1
+        fi
+
+    - name: Create GitHub release
+      if: startsWith(github.ref, 'refs/tags/v')
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: ${{ github.ref_name }}
+        release_name: Release ${{ github.ref_name }}
+        body: |
+          ## Portfolio Tracker ${{ github.ref_name }}
+          
+          ### 🐳 Docker Images
+          - **Multi-Architecture Support**: AMD64 and ARM64
+          - **Docker Hub**: `${{ env.IMAGE_NAME }}:${{ github.ref_name }}`
+          - **Latest**: `${{ env.IMAGE_NAME }}:latest`
+          
+          ### 📦 Pull Commands
+          ```bash
+          docker pull ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          docker pull ${{ env.IMAGE_NAME }}:latest
+          ```
+          
+          ### 🏗️ Supported Architectures
+          - `linux/amd64` - Intel/AMD x86_64 processors
+          - `linux/arm64` - ARM64 processors (Apple Silicon, ARM servers)
+          
+          ### 🚀 Kubernetes Deployment
+          ```yaml
+          image: ${{ env.IMAGE_NAME }}:${{ github.ref_name }}
+          ```
+          
+          ### 📋 Changes
+          See commit history for detailed changes in this release.
+        draft: false
+        prerelease: ${{ contains(github.ref_name, 'beta') || contains(github.ref_name, 'alpha') || contains(github.ref_name, 'rc') }}
+
+    - name: Update deployment files
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "📝 Updating Kubernetes deployment files with new image version..."
+        
+        # Update the image tag in deployment.yaml
+        sed -i "s|image: ${{ env.IMAGE_NAME }}:.*|image: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}|g" rancher/deployment.yaml
+        
+        # Show the changes
+        echo "🔍 Updated deployment file:"
+        grep "image: ${{ env.IMAGE_NAME }}" rancher/deployment.yaml || true
+
+    - name: Summary
+      if: github.event_name != 'pull_request'
+      run: |
+        echo "## 🎉 Build Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Image Details" >> $GITHUB_STEP_SUMMARY
+        echo "- **Repository**: ${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Version**: ${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "- **Architectures**: linux/amd64, linux/arm64" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🚀 Usage" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+        echo "docker pull ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🎯 Kubernetes" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`yaml" >> $GITHUB_STEP_SUMMARY
+        echo "image: ${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+        echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
