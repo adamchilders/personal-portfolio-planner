@@ -238,15 +238,33 @@ class PortfolioService
             ];
         }
 
-        // Get date range
+        // Get the earliest transaction date for this portfolio
+        $earliestTransaction = $portfolio->transactions()
+            ->orderBy('transaction_date', 'asc')
+            ->first();
+
+        if (!$earliestTransaction) {
+            return [
+                'labels' => [],
+                'portfolio_values' => [],
+                'cost_basis_values' => []
+            ];
+        }
+
+        $earliestDate = new \DateTime($earliestTransaction->transaction_date->format('Y-m-d'));
         $endDate = new \DateTime();
         $startDate = (clone $endDate)->modify("-{$days} days");
+
+        // Use the later of the two dates (earliest transaction or requested start date)
+        if ($earliestDate > $startDate) {
+            $startDate = $earliestDate;
+        }
 
         $labels = [];
         $portfolioValues = [];
         $costBasisValues = [];
 
-        // Get all business days in the range
+        // Get all business days in the range from first transaction onwards
         $currentDate = clone $startDate;
         while ($currentDate <= $endDate) {
             if ($currentDate->format('N') <= 5) { // Monday = 1, Friday = 5
@@ -256,23 +274,27 @@ class PortfolioService
                 $totalValue = 0;
                 $totalCostBasis = 0;
 
-                foreach ($holdings as $holding) {
-                    // Get historical price for this date
-                    $historicalPrice = $this->stockDataService->getHistoricalPrice(
-                        $holding->stock_symbol,
-                        $dateStr
-                    );
+                // Only calculate values if we have transactions by this date
+                if ($currentDate >= $earliestDate) {
+                    foreach ($holdings as $holding) {
+                        // Get historical price for this date
+                        $historicalPrice = $this->stockDataService->getHistoricalPrice(
+                            $holding->stock_symbol,
+                            $dateStr
+                        );
 
-                    if ($historicalPrice) {
-                        $totalValue += $holding->quantity * $historicalPrice;
-                    } else {
-                        // Fallback to current price if historical data not available
-                        $currentPrice = $holding->stock?->quote?->current_price ?? 0;
-                        $totalValue += $holding->quantity * $currentPrice;
+                        if ($historicalPrice) {
+                            $totalValue += $holding->quantity * $historicalPrice;
+                            $totalCostBasis += $holding->getTotalCostBasis();
+                        }
+                        // If no historical price available, portfolio value remains 0 for that date
+                        // but cost basis is still counted once we have the holding
+                        else {
+                            $totalCostBasis += $holding->getTotalCostBasis();
+                        }
                     }
-
-                    $totalCostBasis += $holding->getTotalCostBasis();
                 }
+                // If before first transaction, values remain 0
 
                 $portfolioValues[] = round($totalValue, 2);
                 $costBasisValues[] = round($totalCostBasis, 2);

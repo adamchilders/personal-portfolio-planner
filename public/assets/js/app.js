@@ -795,10 +795,10 @@ class PortfolioApp {
 
         if (portfolioId) {
             try {
-                // Fetch real historical data
+                // Fetch real historical data (use 60 days to ensure we capture first transaction)
                 const [performanceResponse, stockPerformanceResponse] = await Promise.all([
-                    this.apiCall(`/portfolios/${portfolioId}/performance?days=30`),
-                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=30`)
+                    this.apiCall(`/portfolios/${portfolioId}/performance?days=60`),
+                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`)
                 ]);
 
                 // Performance Chart - use real data if available
@@ -877,9 +877,9 @@ class PortfolioApp {
                 return window.portfolioCharts.generateMockPerformanceData(30);
             }
 
-            // Fetch performance data for all portfolios
+            // Fetch performance data for all portfolios (use 60 days to capture first transactions)
             const performancePromises = portfoliosWithValue.map(portfolio =>
-                this.apiCall(`/portfolios/${portfolio.id}/performance?days=30`)
+                this.apiCall(`/portfolios/${portfolio.id}/performance?days=60`)
             );
 
             const performanceResponses = await Promise.all(performancePromises);
