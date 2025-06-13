@@ -15,34 +15,42 @@ class AuthController
     ) {}
     
     /**
-     * Login endpoint
+     * Login endpoint - handles both POST and GET for development compatibility
      */
     public function login(Request $request, Response $response): Response
     {
-        $data = $request->getParsedBody();
-        
+        $method = $request->getMethod();
+
+        // Handle both POST (production) and GET (development) requests
+        if ($method === 'POST') {
+            $data = $request->getParsedBody();
+        } else {
+            // GET request - use query parameters
+            $data = $request->getQueryParams();
+        }
+
         if (empty($data['identifier']) || empty($data['password'])) {
             return $this->errorResponse($response, 'Username/email and password are required', 400);
         }
-        
+
         $ipAddress = $this->getClientIp($request);
         $userAgent = $request->getHeaderLine('User-Agent');
-        
+
         $result = $this->authService->login(
             $data['identifier'],
             $data['password'],
             $ipAddress,
             $userAgent
         );
-        
+
         if (!$result['success']) {
             return $this->errorResponse($response, $result['message'], 401);
         }
-        
+
         // Set session cookie
         $cookie = $this->authService->generateSessionCookie($result['token']);
         $response = $response->withHeader('Set-Cookie', $this->formatCookie($cookie));
-        
+
         $responseData = [
             'success' => true,
             'message' => 'Login successful',
@@ -55,7 +63,7 @@ class AuthController
             ],
             'token' => $result['token']
         ];
-        
+
         $response->getBody()->write(json_encode($responseData));
         return $response->withHeader('Content-Type', 'application/json');
     }
@@ -107,11 +115,19 @@ class AuthController
     }
 
     /**
-     * Register endpoint
+     * Register endpoint - handles both POST and GET for development compatibility
      */
     public function register(Request $request, Response $response): Response
     {
-        $data = $request->getParsedBody();
+        $method = $request->getMethod();
+
+        // Handle both POST (production) and GET (development) requests
+        if ($method === 'POST') {
+            $data = $request->getParsedBody();
+        } else {
+            // GET request - use query parameters
+            $data = $request->getQueryParams();
+        }
         
         $required = ['username', 'email', 'password'];
         foreach ($required as $field) {
@@ -211,8 +227,6 @@ class AuthController
                 'username' => $user->username,
                 'email' => $user->email,
                 'role' => $user->role,
-                'first_name' => $user->first_name,
-                'last_name' => $user->last_name,
                 'display_name' => $user->display_name,
                 'is_active' => $user->is_active,
                 'email_verified_at' => $user->email_verified_at?->toISOString(),

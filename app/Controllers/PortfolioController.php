@@ -203,13 +203,22 @@ class PortfolioController
     }
     
     /**
-     * Add a transaction to a portfolio
+     * Add a transaction to a portfolio - handles both POST and GET for development compatibility
      */
     public function addTransaction(Request $request, Response $response, array $args): Response
     {
         $user = $request->getAttribute('user');
         $portfolioId = (int)$args['id'];
-        $data = $request->getParsedBody();
+
+        $method = $request->getMethod();
+
+        // Handle both POST (production) and GET (development) requests
+        if ($method === 'POST') {
+            $data = $request->getParsedBody();
+        } else {
+            // GET request - use query parameters
+            $data = $request->getQueryParams();
+        }
 
 
 

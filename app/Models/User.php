@@ -90,8 +90,8 @@ class User extends Model
     
     public function getDisplayNameAttribute(): string
     {
-        $fullName = $this->getFullNameAttribute();
-        return !empty($fullName) ? $fullName : $this->username;
+        // Use username as display name instead of full name
+        return $this->username;
     }
     
     public function verifyPassword(string $password): bool
