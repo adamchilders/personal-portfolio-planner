@@ -69,6 +69,16 @@ spec:
           echo "📦 Vendor directory:"
           ls -la /app-code/vendor/ | head -10
 
+          # Create .env file from .env.example for Kubernetes deployment
+          echo "📝 Creating .env file for Kubernetes..."
+          if [ -f "/app-code/.env.example" ]; then
+            cp /app-code/.env.example /app-code/.env
+            echo "✅ .env file created from .env.example"
+          else
+            echo "⚠️ No .env.example found, creating minimal .env"
+            echo "APP_ENV=production" > /app-code/.env
+          fi
+
           echo "🎯 Deployment ready!"
         env:
         - name: GIT_REF
