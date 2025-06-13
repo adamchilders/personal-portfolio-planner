@@ -196,6 +196,21 @@ spec:
         app: portfolio-tracker
         component: nginx
     spec:
+      initContainers:
+      - name: copy-public-files
+        image: adamchilders/portfolio-tracker:v1.0.5
+        imagePullPolicy: Always
+        command: ['sh', '-c', 'cp -r /var/www/html/public/* /shared-public/ || echo "No files to copy"']
+        volumeMounts:
+        - name: app-public
+          mountPath: /shared-public
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
       containers:
       - name: nginx
         image: nginx:alpine
