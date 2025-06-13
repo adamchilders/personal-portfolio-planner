@@ -129,8 +129,8 @@ class PortfolioApp {
                 this.confirmDeleteTrade(tradeIdToDelete);
                 break;
             case 'view-holding-trades':
-                const symbol = element.dataset.symbol;
-                this.showHoldingTradesModal(symbol);
+                const holdingSymbol = element.dataset.symbol;
+                this.showHoldingTradesModal(holdingSymbol);
                 break;
             case 'edit-holding':
                 const symbolToEdit = element.dataset.symbol;
