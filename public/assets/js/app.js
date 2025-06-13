@@ -168,12 +168,13 @@ class PortfolioApp {
         try {
             this.showLoading('Signing in...');
 
-            const response = await this.authCall('/auth/login', {
-                method: 'POST',
-                body: JSON.stringify({
-                    identifier: data.email,
-                    password: data.password
-                })
+            // Use GET endpoint for development (POST has issues in local Docker)
+            const params = new URLSearchParams({
+                identifier: data.email,
+                password: data.password
+            });
+            const response = await this.authCall(`/auth/login-dev?${params}`, {
+                method: 'GET'
             });
             
             if (response.success) {

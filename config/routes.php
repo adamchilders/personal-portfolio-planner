@@ -59,7 +59,31 @@ $app->get('/ping', function (Request $request, Response $response) {
 
 // Authentication routes
 $app->group('/auth', function ($group) {
+    // Debug endpoint to test POST requests
+    $group->post('/test', function (Request $request, Response $response) {
+        try {
+            $contentType = $request->getHeaderLine('Content-Type');
+            $method = $request->getMethod();
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'method' => $method,
+                'content_type' => $contentType,
+                'message' => 'POST request received successfully'
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+        } catch (Exception $e) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'error' => $e->getMessage()
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    });
+
     $group->post('/login', [AuthController::class, 'login']);
+    // Temporary workaround for local development - GET login
+    $group->get('/login-dev', [AuthController::class, 'loginDev']);
     $group->post('/register', [AuthController::class, 'register']);
     $group->post('/logout', [AuthController::class, 'logout']);
     $group->get('/status', [AuthController::class, 'status']);

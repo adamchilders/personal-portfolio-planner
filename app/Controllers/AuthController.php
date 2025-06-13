@@ -61,6 +61,52 @@ class AuthController
     }
     
     /**
+     * Development login endpoint using GET (workaround for POST issues)
+     */
+    public function loginDev(Request $request, Response $response): Response
+    {
+        $params = $request->getQueryParams();
+
+        if (empty($params['identifier']) || empty($params['password'])) {
+            return $this->errorResponse($response, 'Username/email and password are required', 400);
+        }
+
+        $ipAddress = $this->getClientIp($request);
+        $userAgent = $request->getHeaderLine('User-Agent');
+
+        $result = $this->authService->login(
+            $params['identifier'],
+            $params['password'],
+            $ipAddress,
+            $userAgent
+        );
+
+        if (!$result['success']) {
+            return $this->errorResponse($response, $result['message'], 401);
+        }
+
+        // Set session cookie
+        $cookie = $this->authService->generateSessionCookie($result['token']);
+        $response = $response->withHeader('Set-Cookie', $this->formatCookie($cookie));
+
+        $responseData = [
+            'success' => true,
+            'message' => 'Login successful',
+            'user' => [
+                'id' => $result['user']->id,
+                'username' => $result['user']->username,
+                'email' => $result['user']->email,
+                'role' => $result['user']->role,
+                'display_name' => $result['user']->display_name
+            ],
+            'token' => $result['token']
+        ];
+
+        $response->getBody()->write(json_encode($responseData));
+        return $response->withHeader('Content-Type', 'application/json');
+    }
+
+    /**
      * Register endpoint
      */
     public function register(Request $request, Response $response): Response
