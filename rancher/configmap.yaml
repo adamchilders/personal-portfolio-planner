@@ -35,9 +35,8 @@ data:
   health-check-enabled: "true"
 
   # Git Deployment Configuration
-  git-branch: "main"                    # Change this to deploy different branches/tags
-  git-sync-interval: "60"               # How often to check for updates (seconds)
-  git-auto-sync: "true"                 # Enable/disable automatic git sync
+  git-ref: "v2.0.1"                     # Git branch, tag, or commit hash to deploy
+  git-auto-sync: "false"                # Disable automatic sync - deploy on demand only
 
 ---
 apiVersion: v1

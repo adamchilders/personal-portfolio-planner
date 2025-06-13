@@ -1,0 +1,195 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-tracker-app
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-tracker
+      component: app
+  template:
+    metadata:
+      labels:
+        app: portfolio-tracker
+        component: app
+    spec:
+      initContainers:
+      # Git clone the specified version
+      - name: git-clone
+        image: alpine/git:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "🔄 Cloning Portfolio Tracker code..."
+          
+          # Get configuration from environment
+          REPO="https://github.com/adamchilders/personal-portfolio-planner.git"
+          GIT_REF="${GIT_REF:-main}"
+          
+          echo "📋 Deployment Configuration:"
+          echo "   Repository: $REPO"
+          echo "   Git Ref: $GIT_REF"
+          echo "   Target: /app-code/"
+          
+          # Clone the specific version
+          echo "📥 Cloning $GIT_REF..."
+          git clone --depth 1 --branch "$GIT_REF" "$REPO" /app-code/ || {
+            echo "❌ Failed to clone $GIT_REF"
+            echo "💡 Make sure the branch/tag exists in the repository"
+            exit 1
+          }
+          
+          echo "✅ Successfully cloned $GIT_REF"
+          echo "📁 Repository contents:"
+          ls -la /app-code/
+          
+          echo "🎯 Deployment ready!"
+        env:
+        - name: GIT_REF
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: git-ref
+        volumeMounts:
+        - name: app-code
+          mountPath: /app-code
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      containers:
+      # Main application container
+      - name: app
+        image: adamchilders/portfolio-tracker:v2.0.1
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "false"
+        - name: APP_URL
+          value: "https://portfolio.adamchilders.com"
+        - name: DB_HOST
+          value: "mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_DATABASE
+          value: "portfolio_tracker"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-password
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: CACHE_DRIVER
+          value: "redis"
+        - name: SESSION_DRIVER
+          value: "redis"
+        - name: QUEUE_CONNECTION
+          value: "redis"
+        # Add git ref as environment variable for reference
+        - name: DEPLOYED_GIT_REF
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: git-ref
+        volumeMounts:
+        - name: app-code
+          mountPath: /var/www/html
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      
+      volumes:
+      - name: app-code
+        emptyDir: {}
+      
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-tracker-app-service
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  selector:
+    app: portfolio-tracker
+    component: app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portfolio-tracker-ingress
+  namespace: portfolio-tracker
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - portfolio.adamchilders.com
+    secretName: portfolio-tracker-tls
+  rules:
+  - host: portfolio.adamchilders.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portfolio-tracker-app-service
+            port:
+              number: 80
