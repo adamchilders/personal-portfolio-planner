@@ -4,7 +4,7 @@ metadata:
   name: letsencrypt-staging
 spec:
   acme:
-    # Replace with your email address
+    # Replace with your email addressyou
     email: adam@adamchilders.com
     server: https://acme-staging-v02.api.letsencrypt.org/directory
     privateKeySecretRef:
