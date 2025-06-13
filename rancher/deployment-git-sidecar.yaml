@@ -18,6 +18,52 @@ spec:
         app: portfolio-tracker
         component: app
     spec:
+      initContainers:
+      # Initial git clone to ensure code is available before app starts
+      - name: git-clone
+        image: alpine/git:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "🔄 Initial git clone for app startup..."
+
+          # Get configuration from environment
+          REPO="https://github.com/adamchilders/personal-portfolio-planner.git"
+          BRANCH="${GIT_BRANCH:-main}"
+
+          echo "📋 Configuration:"
+          echo "   Repository: $REPO"
+          echo "   Branch: $BRANCH"
+
+          # Clone repository
+          echo "📥 Cloning repository..."
+          cd /app-code
+          git clone --depth 1 --branch "$BRANCH" "$REPO" current || {
+            echo "❌ Failed to clone repository"
+            exit 1
+          }
+
+          echo "✅ Initial clone completed successfully"
+          echo "📁 Repository contents:"
+          ls -la /app-code/current/
+        env:
+        - name: GIT_BRANCH
+          valueFrom:
+            configMapKeyRef:
+              name: portfolio-config
+              key: git-branch
+        volumeMounts:
+        - name: app-code
+          mountPath: /app-code
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+
       containers:
       # Main application container
       - name: app
@@ -105,15 +151,13 @@ spec:
           echo "   Branch: $BRANCH"
           echo "   Sync Interval: ${INTERVAL}s"
 
-          # Initial clone
-          echo "📥 Initial clone..."
-          cd /app-code
-          git clone --depth 1 --branch "$BRANCH" "$REPO" current || {
-            echo "❌ Failed to clone repository"
-            exit 1
-          }
-
-          echo "✅ Initial clone completed"
+          # Wait for initial clone to be ready
+          echo "⏳ Waiting for initial clone to be ready..."
+          while [ ! -d "/app-code/current/.git" ]; do
+            echo "   Waiting for git repository..."
+            sleep 2
+          done
+          echo "✅ Repository found, starting sync loop"
 
           # Continuous sync loop
           while true; do
