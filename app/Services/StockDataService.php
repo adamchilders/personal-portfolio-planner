@@ -6,6 +6,8 @@ namespace App\Services;
 
 use App\Models\Stock;
 use App\Models\StockQuote;
+use App\Models\StockPrice;
+use App\Services\ConfigService;
 use App\Helpers\DateTimeHelper;
 use Exception;
 
@@ -54,7 +56,10 @@ class StockDataService
     }
     
     /**
-     * Get current stock quote
+     * Get current stock quote - primarily from cache, with fallback to API
+     *
+     * This method prioritizes cached data and only hits the API as a fallback.
+     * The background job system should handle regular data updates.
      */
     public function getStockQuote(string $symbol): ?array
     {
@@ -63,6 +68,82 @@ class StockDataService
             return $this->getMockQuote($symbol);
         }
 
+        // First, try to get cached data (even if slightly stale)
+        $cachedQuote = $this->getAnyQuote($symbol);
+        if ($cachedQuote) {
+            return $cachedQuote;
+        }
+
+        // No cached data exists, fetch from API as fallback
+        // (This should rarely happen if background jobs are working)
+        error_log("No cached data for {$symbol}, fetching from API as fallback");
+        $freshQuote = $this->fetchQuoteFromAPI($symbol);
+
+        if ($freshQuote) {
+            // Cache the fresh data for future use
+            $this->cacheQuote($symbol, $freshQuote);
+            return $freshQuote;
+        }
+
+        // Last resort: fallback to mock data
+        error_log("API fetch failed for {$symbol}, using mock data");
+        return $this->getMockQuote($symbol);
+    }
+
+    /**
+     * Get cached quote if it's still fresh
+     */
+    private function getCachedQuote(string $symbol): ?array
+    {
+        $quote = StockQuote::find($symbol);
+
+        if (!$quote || !$quote->quote_time) {
+            return null;
+        }
+
+        $maxAgeMinutes = $this->getQuoteCacheTimeout();
+
+        if ($quote->isStale($maxAgeMinutes)) {
+            return null;
+        }
+
+        // Convert database model to array format
+        return $this->convertQuoteToArray($quote);
+    }
+
+    /**
+     * Get any cached quote data (fresh or stale)
+     */
+    private function getAnyQuote(string $symbol): ?array
+    {
+        $quote = StockQuote::find($symbol);
+
+        if (!$quote) {
+            return null;
+        }
+
+        return $this->convertQuoteToArray($quote);
+    }
+
+    /**
+     * Get stale quote data (for fallback when API fails)
+     */
+    private function getStaleQuote(string $symbol): ?array
+    {
+        $quote = StockQuote::find($symbol);
+
+        if (!$quote) {
+            return null;
+        }
+
+        return $this->convertQuoteToArray($quote);
+    }
+
+    /**
+     * Fetch quote directly from Yahoo Finance API
+     */
+    public function fetchQuoteFromAPI(string $symbol): ?array
+    {
         try {
             $url = self::YAHOO_FINANCE_BASE_URL . urlencode($symbol);
             $response = $this->makeHttpRequest($url);
@@ -95,9 +176,8 @@ class StockDataService
             ];
 
         } catch (Exception $e) {
-            error_log("Stock quote error for {$symbol}: " . $e->getMessage());
-            // Fallback to mock data if API fails
-            return $this->getMockQuote($symbol);
+            error_log("Stock quote API error for {$symbol}: " . $e->getMessage());
+            return null;
         }
     }
     
@@ -268,11 +348,368 @@ class StockDataService
     }
 
     /**
+     * Cache quote data in database
+     */
+    private function cacheQuote(string $symbol, array $quoteData): void
+    {
+        try {
+            StockQuote::updateOrCreate(
+                ['symbol' => $symbol],
+                [
+                    'current_price' => $quoteData['current_price'],
+                    'change_amount' => $quoteData['change_amount'],
+                    'change_percent' => $quoteData['change_percent'],
+                    'volume' => $quoteData['volume'],
+                    'market_cap' => $quoteData['market_cap'],
+                    'fifty_two_week_high' => $quoteData['fifty_two_week_high'],
+                    'fifty_two_week_low' => $quoteData['fifty_two_week_low'],
+                    'quote_time' => $quoteData['quote_time'],
+                    'market_state' => $quoteData['market_state']
+                ]
+            );
+        } catch (Exception $e) {
+            error_log("Error caching quote for {$symbol}: " . $e->getMessage());
+        }
+    }
+
+    /**
+     * Convert StockQuote model to array format
+     */
+    private function convertQuoteToArray(StockQuote $quote): array
+    {
+        return [
+            'symbol' => $quote->symbol,
+            'current_price' => (float)$quote->current_price,
+            'change_amount' => (float)$quote->change_amount,
+            'change_percent' => (float)$quote->change_percent,
+            'volume' => $quote->volume,
+            'market_cap' => $quote->market_cap,
+            'fifty_two_week_high' => (float)$quote->fifty_two_week_high,
+            'fifty_two_week_low' => (float)$quote->fifty_two_week_low,
+            'quote_time' => $quote->quote_time,
+            'market_state' => $quote->market_state,
+            'currency' => 'USD', // Default, could be stored in stocks table
+            'exchange' => $quote->stock?->exchange ?? null,
+            'name' => $quote->stock?->name ?? $quote->symbol
+        ];
+    }
+
+    /**
+     * Get appropriate cache timeout based on market hours
+     */
+    private function getQuoteCacheTimeout(): int
+    {
+        if ($this->isMarketHours()) {
+            return 15; // 15 minutes during market hours
+        } else {
+            return 30; // 30 minutes after hours
+        }
+    }
+
+    /**
+     * Check if current time is during market hours (9:30 AM - 4:00 PM ET)
+     */
+    private function isMarketHours(): bool
+    {
+        $now = DateTimeHelper::now();
+        $marketTimezone = new \DateTimeZone($_ENV['MARKET_TIMEZONE'] ?? 'America/New_York');
+        $marketTime = $now->setTimezone($marketTimezone);
+
+        $dayOfWeek = (int)$marketTime->format('N'); // 1 = Monday, 7 = Sunday
+
+        // Skip weekends
+        if ($dayOfWeek >= 6) {
+            return false;
+        }
+
+        $hour = (int)$marketTime->format('H');
+        $minute = (int)$marketTime->format('i');
+        $timeInMinutes = $hour * 60 + $minute;
+
+        $marketStart = 9 * 60 + 30; // 9:30 AM
+        $marketEnd = 16 * 60; // 4:00 PM
+
+        return $timeInMinutes >= $marketStart && $timeInMinutes <= $marketEnd;
+    }
+
+    /**
+     * Fetch and store historical price data for a stock
+     * Only fetches missing data to avoid unnecessary API calls
+     */
+    public function fetchHistoricalData(string $symbol, ?int $days = null): bool
+    {
+        // Use configured default if not specified
+        $days = $days ?? ConfigService::getHistoricalDataDays();
+
+        if ($this->shouldUseMockData()) {
+            return $this->generateMockHistoricalData($symbol, $days);
+        }
+
+        // Check what data we already have
+        $missingDateRanges = $this->getMissingHistoricalDateRanges($symbol, $days);
+
+        if (empty($missingDateRanges)) {
+            $this->log("All historical data for {$symbol} is already up to date");
+            return true;
+        }
+
+        $totalStored = 0;
+
+        // Fetch only missing date ranges
+        foreach ($missingDateRanges as $range) {
+            $stored = $this->fetchHistoricalDataRange($symbol, $range['start'], $range['end']);
+            $totalStored += $stored;
+
+            // Rate limiting between ranges
+            if (count($missingDateRanges) > 1) {
+                usleep(500000); // 500ms delay
+            }
+        }
+
+        $this->log("Stored {$totalStored} new historical price records for {$symbol}");
+        return $totalStored > 0;
+    }
+
+    /**
+     * Get missing date ranges for historical data
+     */
+    private function getMissingHistoricalDateRanges(string $symbol, int $days): array
+    {
+        $endDate = DateTimeHelper::now();
+        $startDate = clone $endDate;
+        $startDate->modify("-{$days} days");
+
+        // Get existing data dates
+        $existingDates = StockPrice::where('symbol', $symbol)
+            ->where('price_date', '>=', $startDate->format('Y-m-d'))
+            ->where('price_date', '<=', $endDate->format('Y-m-d'))
+            ->pluck('price_date')
+            ->map(function($date) {
+                return is_string($date) ? $date : $date->format('Y-m-d');
+            })
+            ->toArray();
+
+        // Generate all expected business days
+        $expectedDates = $this->getBusinessDays($startDate, $endDate);
+
+        // Find missing dates
+        $missingDates = array_diff($expectedDates, $existingDates);
+
+        if (empty($missingDates)) {
+            return [];
+        }
+
+        // Group consecutive missing dates into ranges
+        sort($missingDates);
+        $ranges = [];
+        $rangeStart = $missingDates[0];
+        $rangeEnd = $missingDates[0];
+
+        for ($i = 1; $i < count($missingDates); $i++) {
+            $currentDate = $missingDates[$i];
+            $prevDate = $missingDates[$i - 1];
+
+            // Check if dates are consecutive business days
+            if ($this->isNextBusinessDay($prevDate, $currentDate)) {
+                $rangeEnd = $currentDate;
+            } else {
+                // End current range and start new one
+                $ranges[] = ['start' => $rangeStart, 'end' => $rangeEnd];
+                $rangeStart = $currentDate;
+                $rangeEnd = $currentDate;
+            }
+        }
+
+        // Add the last range
+        $ranges[] = ['start' => $rangeStart, 'end' => $rangeEnd];
+
+        return $ranges;
+    }
+
+    /**
+     * Fetch historical data for a specific date range
+     */
+    private function fetchHistoricalDataRange(string $symbol, string $startDate, string $endDate): int
+    {
+        try {
+            $start = new \DateTime($startDate);
+            $end = new \DateTime($endDate);
+
+            $url = self::YAHOO_FINANCE_BASE_URL . urlencode($symbol) .
+                   '?period1=' . $start->getTimestamp() .
+                   '&period2=' . $end->getTimestamp() .
+                   '&interval=1d';
+
+            $response = $this->makeHttpRequest($url);
+            $data = json_decode($response, true);
+
+            if (!isset($data['chart']['result'][0]['timestamp'])) {
+                return 0;
+            }
+
+            $result = $data['chart']['result'][0];
+            $timestamps = $result['timestamp'];
+            $quotes = $result['indicators']['quote'][0];
+            $adjClose = $result['indicators']['adjclose'][0]['adjclose'] ?? null;
+
+            $stored = 0;
+            for ($i = 0; $i < count($timestamps); $i++) {
+                $date = date('Y-m-d', $timestamps[$i]);
+
+                // Skip if any required data is null
+                if (is_null($quotes['close'][$i]) || is_null($quotes['volume'][$i])) {
+                    continue;
+                }
+
+                $priceData = [
+                    'symbol' => $symbol,
+                    'price_date' => $date,
+                    'open_price' => $quotes['open'][$i],
+                    'high_price' => $quotes['high'][$i],
+                    'low_price' => $quotes['low'][$i],
+                    'close_price' => $quotes['close'][$i],
+                    'adjusted_close' => $adjClose[$i] ?? $quotes['close'][$i],
+                    'volume' => $quotes['volume'][$i]
+                ];
+
+                if ($this->storeHistoricalPrice($priceData)) {
+                    $stored++;
+                }
+            }
+
+            $this->log("Stored {$stored} historical price records for {$symbol} ({$startDate} to {$endDate})");
+            return $stored;
+
+        } catch (Exception $e) {
+            error_log("Historical data fetch error for {$symbol}: " . $e->getMessage());
+            return 0;
+        }
+    }
+
+    /**
+     * Store historical price data in database
+     */
+    private function storeHistoricalPrice(array $priceData): bool
+    {
+        try {
+            StockPrice::updateOrCreate(
+                [
+                    'symbol' => $priceData['symbol'],
+                    'price_date' => $priceData['price_date']
+                ],
+                $priceData
+            );
+            return true;
+        } catch (Exception $e) {
+            error_log("Error storing historical price: " . $e->getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Generate mock historical data for development
+     */
+    private function generateMockHistoricalData(string $symbol, int $days): bool
+    {
+        $mockQuote = $this->getMockQuote($symbol);
+        if (!$mockQuote) {
+            return false;
+        }
+
+        $basePrice = $mockQuote['current_price'];
+        $stored = 0;
+
+        for ($i = $days; $i >= 0; $i--) {
+            $dateTime = DateTimeHelper::now();
+            $dateTime->modify("-{$i} days");
+            $date = $dateTime->format('Y-m-d');
+
+            // Generate realistic price variations (±2% daily)
+            $variation = mt_rand(-200, 200) / 10000; // -2% to +2%
+            $dayPrice = $basePrice * (1 + $variation);
+
+            $open = $dayPrice * (1 + mt_rand(-50, 50) / 10000);
+            $high = max($open, $dayPrice) * (1 + mt_rand(0, 100) / 10000);
+            $low = min($open, $dayPrice) * (1 - mt_rand(0, 100) / 10000);
+            $volume = mt_rand(1000000, 50000000);
+
+            $priceData = [
+                'symbol' => $symbol,
+                'price_date' => $date,
+                'open_price' => round($open, 2),
+                'high_price' => round($high, 2),
+                'low_price' => round($low, 2),
+                'close_price' => round($dayPrice, 2),
+                'adjusted_close' => round($dayPrice, 2),
+                'volume' => $volume
+            ];
+
+            if ($this->storeHistoricalPrice($priceData)) {
+                $stored++;
+            }
+        }
+
+        $this->log("Generated {$stored} mock historical price records for {$symbol}");
+        return $stored > 0;
+    }
+
+    /**
      * Check if we should use mock data (for development/testing)
      */
     private function shouldUseMockData(): bool
     {
         return ($_ENV['USE_MOCK_STOCK_DATA'] ?? 'false') === 'true';
+    }
+
+    /**
+     * Get business days between two dates
+     */
+    private function getBusinessDays(\DateTime $startDate, \DateTime $endDate): array
+    {
+        $businessDays = [];
+        $current = clone $startDate;
+
+        while ($current <= $endDate) {
+            $dayOfWeek = (int)$current->format('N'); // 1 = Monday, 7 = Sunday
+
+            // Skip weekends (Saturday = 6, Sunday = 7)
+            if ($dayOfWeek < 6) {
+                $businessDays[] = $current->format('Y-m-d');
+            }
+
+            $current->modify('+1 day');
+        }
+
+        return $businessDays;
+    }
+
+    /**
+     * Check if second date is the next business day after first date
+     */
+    private function isNextBusinessDay(string $date1, string $date2): bool
+    {
+        $d1 = new \DateTime($date1);
+        $d2 = new \DateTime($date2);
+
+        // Add one day to first date
+        $nextDay = clone $d1;
+        $nextDay->modify('+1 day');
+
+        // Skip weekends
+        while ((int)$nextDay->format('N') >= 6) {
+            $nextDay->modify('+1 day');
+        }
+
+        return $nextDay->format('Y-m-d') === $d2->format('Y-m-d');
+    }
+
+    /**
+     * Log message with timestamp
+     */
+    private function log(string $message): void
+    {
+        $timestamp = DateTimeHelper::now()->format('Y-m-d H:i:s');
+        error_log("[{$timestamp}] StockDataService: {$message}");
     }
 
     /**
@@ -319,6 +756,46 @@ class StockDataService
                 'market_cap' => 789012345678,
                 'fifty_two_week_high' => 299.29,
                 'fifty_two_week_low' => 138.80,
+                'exchange' => 'NASDAQ'
+            ],
+            'MO' => [
+                'name' => 'Altria Group, Inc.',
+                'current_price' => 59.62,
+                'previous_close' => 58.95,
+                'volume' => 12345678,
+                'market_cap' => 108765432109,
+                'fifty_two_week_high' => 62.84,
+                'fifty_two_week_low' => 40.35,
+                'exchange' => 'NYSE'
+            ],
+            'NVDA' => [
+                'name' => 'NVIDIA Corporation',
+                'current_price' => 875.30,
+                'previous_close' => 869.45,
+                'volume' => 34567890,
+                'market_cap' => 2156789012345,
+                'fifty_two_week_high' => 974.00,
+                'fifty_two_week_low' => 390.50,
+                'exchange' => 'NASDAQ'
+            ],
+            'SPY' => [
+                'name' => 'SPDR S&P 500 ETF Trust',
+                'current_price' => 589.12,
+                'previous_close' => 587.33,
+                'volume' => 45678901,
+                'market_cap' => 567890123456,
+                'fifty_two_week_high' => 595.38,
+                'fifty_two_week_low' => 440.82,
+                'exchange' => 'NYSE'
+            ],
+            'AMZN' => [
+                'name' => 'Amazon.com, Inc.',
+                'current_price' => 186.51,
+                'previous_close' => 184.92,
+                'volume' => 23456789,
+                'market_cap' => 1987654321098,
+                'fifty_two_week_high' => 201.20,
+                'fifty_two_week_low' => 139.52,
                 'exchange' => 'NASDAQ'
             ]
         ];

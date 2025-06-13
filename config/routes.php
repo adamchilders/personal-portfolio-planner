@@ -81,10 +81,13 @@ $app->group('/auth', function ($group) {
         }
     });
 
+    // Login endpoint - supports both POST (production) and GET (development)
     $group->post('/login', [AuthController::class, 'login']);
-    // Temporary workaround for local development - GET login
-    $group->get('/login-dev', [AuthController::class, 'loginDev']);
+    $group->get('/login', [AuthController::class, 'login']);
+
+    // Register endpoint - supports both POST (production) and GET (development)
     $group->post('/register', [AuthController::class, 'register']);
+    $group->get('/register', [AuthController::class, 'register']);
     $group->post('/logout', [AuthController::class, 'logout']);
     $group->get('/status', [AuthController::class, 'status']);
     $group->get('/has-users', [AuthController::class, 'hasUsers']);
@@ -110,6 +113,7 @@ $app->group('/api/portfolios', function ($group) {
 $app->group('/api/stocks', function ($group) {
     $group->get('/search', [StockController::class, 'search']);
     $group->get('/{symbol:[A-Z0-9.-]+}/quote', [StockController::class, 'quote']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/history', [StockController::class, 'history']);
     $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
     $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
     $group->post('/quotes', [StockController::class, 'multipleQuotes']);
@@ -166,6 +170,24 @@ $app->group('/api', function ($group) {
         return $response->withHeader('Content-Type', 'application/json');
     });
 
+    // Configuration endpoint
+    $group->get('/config', function (Request $request, Response $response) {
+        $config = \App\Services\ConfigService::getAllConfig();
+        $errors = \App\Services\ConfigService::validateConfig();
+
+        $data = [
+            'config' => $config,
+            'validation' => [
+                'valid' => empty($errors),
+                'errors' => $errors
+            ],
+            'timestamp' => date('c')
+        ];
+
+        $response->getBody()->write(json_encode($data, JSON_PRETTY_PRINT));
+        return $response->withHeader('Content-Type', 'application/json');
+    });
+
     // API documentation endpoint
     $group->get('/docs', function (Request $request, Response $response) {
         $data = [
@@ -190,6 +212,7 @@ $app->group('/api', function ($group) {
                 'Stocks' => [
                     'GET /api/stocks/search?q={query}' => 'Search for stocks',
                     'GET /api/stocks/{symbol}/quote' => 'Get current stock quote',
+                    'GET /api/stocks/{symbol}/history' => 'Get historical price data',
                     'GET /api/stocks/{symbol}' => 'Get stock information',
                     'POST /api/stocks/{symbol}/update-quote' => 'Update stock quote',
                     'POST /api/stocks/quotes' => 'Get multiple stock quotes'

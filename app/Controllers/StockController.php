@@ -6,6 +6,7 @@ namespace App\Controllers;
 
 use App\Services\StockDataService;
 use App\Models\Stock;
+use App\Models\StockPrice;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
@@ -74,7 +75,77 @@ class StockController
             return $this->errorResponse($response, 'Failed to fetch quote: ' . $e->getMessage(), 500);
         }
     }
-    
+
+    /**
+     * Get historical price data for a stock
+     */
+    public function history(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol'] ?? '');
+        $queryParams = $request->getQueryParams();
+
+        if (empty($symbol)) {
+            return $this->errorResponse($response, 'Stock symbol is required', 400);
+        }
+
+        if (!$this->stockDataService->isValidSymbol($symbol)) {
+            return $this->errorResponse($response, 'Invalid stock symbol format', 400);
+        }
+
+        // Parse query parameters
+        $days = min((int)($queryParams['days'] ?? 30), 365); // Max 1 year
+        $startDate = $queryParams['start'] ?? null;
+        $endDate = $queryParams['end'] ?? null;
+
+        try {
+            $query = StockPrice::where('symbol', $symbol);
+
+            if ($startDate && $endDate) {
+                // Use date range if provided
+                $query->whereBetween('price_date', [$startDate, $endDate]);
+            } else {
+                // Use days parameter
+                $cutoffDate = date('Y-m-d', strtotime("-{$days} days"));
+                $query->where('price_date', '>=', $cutoffDate);
+            }
+
+            $prices = $query->orderBy('price_date', 'desc')->get();
+
+            if ($prices->isEmpty()) {
+                return $this->errorResponse($response, 'No historical data available for this symbol', 404);
+            }
+
+            $responseData = [
+                'symbol' => $symbol,
+                'period' => [
+                    'days' => $days,
+                    'start_date' => $startDate,
+                    'end_date' => $endDate,
+                    'actual_start' => $prices->last()->price_date,
+                    'actual_end' => $prices->first()->price_date
+                ],
+                'count' => $prices->count(),
+                'prices' => $prices->map(function ($price) {
+                    return [
+                        'date' => $price->price_date,
+                        'open' => (float)$price->open_price,
+                        'high' => (float)$price->high_price,
+                        'low' => (float)$price->low_price,
+                        'close' => (float)$price->close_price,
+                        'adjusted_close' => (float)$price->adjusted_close,
+                        'volume' => $price->volume
+                    ];
+                })->values()
+            ];
+
+            $response->getBody()->write(json_encode($responseData));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, 'Failed to fetch historical data: ' . $e->getMessage(), 500);
+        }
+    }
+
     /**
      * Get stock information with quote
      */
