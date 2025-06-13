@@ -88,67 +88,52 @@ class PortfolioApp {
                 this.showCreatePortfolioModal();
                 break;
             case 'view-portfolio':
-                const portfolioId = element.dataset.portfolioId;
-                this.showPortfolioDetail(portfolioId);
+                this.showPortfolioDetail(element.dataset.portfolioId);
                 break;
             case 'close-modal':
                 this.closeModal();
                 break;
             case 'show-add-holding':
-                const portfolioIdForHolding = element.dataset.portfolioId;
-                this.showAddHoldingModal(portfolioIdForHolding);
+                this.showAddHoldingModal(element.dataset.portfolioId);
                 break;
             case 'show-add-trade':
-                const portfolioIdForTrade = element.dataset.portfolioId;
-                this.showAddTradeModal(portfolioIdForTrade);
+                this.showAddTradeModal(element.dataset.portfolioId);
                 break;
             case 'show-trade-history':
-                const portfolioIdForHistory = element.dataset.portfolioId;
-                this.showTradeHistoryModal(portfolioIdForHistory);
+                this.showTradeHistoryModal(element.dataset.portfolioId);
                 break;
             case 'show-stock-detail':
-                const symbol = element.dataset.symbol;
-                this.showStockDetailModal(symbol);
+                this.showStockDetailModal(element.dataset.symbol);
                 break;
             case 'select-stock':
                 this.selectStock(element.dataset.symbol, element.dataset.name);
                 break;
             case 'refresh-portfolio':
-                const portfolioIdToRefresh = element.dataset.portfolioId;
-                this.refreshPortfolio(portfolioIdToRefresh);
+                this.refreshPortfolio(element.dataset.portfolioId);
                 break;
             case 'change-chart-period':
                 this.changeChartPeriod(element.dataset.period);
                 break;
             case 'edit-trade':
-                const tradeId = element.dataset.tradeId;
-                this.showEditTradeModal(tradeId);
+                this.showEditTradeModal(element.dataset.tradeId);
                 break;
             case 'delete-trade':
-                const tradeIdToDelete = element.dataset.tradeId;
-                this.confirmDeleteTrade(tradeIdToDelete);
+                this.confirmDeleteTrade(element.dataset.tradeId);
                 break;
             case 'view-holding-trades':
-                const holdingSymbol = element.dataset.symbol;
-                this.showHoldingTradesModal(holdingSymbol);
+                this.showHoldingTradesModal(element.dataset.symbol);
                 break;
             case 'edit-holding':
-                const symbolToEdit = element.dataset.symbol;
-                this.showEditHoldingModal(symbolToEdit);
+                this.showEditHoldingModal(element.dataset.symbol);
                 break;
             case 'delete-holding':
-                const symbolToDelete = element.dataset.symbol;
-                this.confirmDeleteHolding(symbolToDelete);
+                this.confirmDeleteHolding(element.dataset.symbol);
                 break;
             case 'confirm-delete-trade':
-                const tradeIdToConfirmDelete = element.dataset.tradeId;
-                const portfolioIdForTrade = this.getCurrentPortfolioId();
-                this.deleteTrade(tradeIdToConfirmDelete, portfolioIdForTrade);
+                this.deleteTrade(element.dataset.tradeId, this.getCurrentPortfolioId());
                 break;
             case 'confirm-delete-holding':
-                const symbolToConfirmDelete = element.dataset.symbol;
-                const portfolioIdForHolding = this.getCurrentPortfolioId();
-                this.deleteHolding(symbolToConfirmDelete, portfolioIdForHolding);
+                this.deleteHolding(element.dataset.symbol, this.getCurrentPortfolioId());
                 break;
         }
     }
