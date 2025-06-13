@@ -142,8 +142,8 @@ class PortfolioApp {
                 break;
             case 'confirm-delete-trade':
                 const tradeIdToConfirmDelete = element.dataset.tradeId;
-                const portfolioId = this.getCurrentPortfolioId();
-                this.deleteTrade(tradeIdToConfirmDelete, portfolioId);
+                const portfolioIdForTrade = this.getCurrentPortfolioId();
+                this.deleteTrade(tradeIdToConfirmDelete, portfolioIdForTrade);
                 break;
             case 'confirm-delete-holding':
                 const symbolToConfirmDelete = element.dataset.symbol;
