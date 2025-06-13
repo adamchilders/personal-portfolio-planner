@@ -1,0 +1,199 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-tracker-app
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-tracker
+      component: app
+  template:
+    metadata:
+      labels:
+        app: portfolio-tracker
+        component: app
+    spec:
+      initContainers:
+      # Git sync container to pull latest code
+      - name: git-sync
+        image: alpine/git:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "🔄 Pulling latest code from GitHub..."
+          git clone https://github.com/adamchilders/personal-portfolio-planner.git /tmp/repo
+          cp -r /tmp/repo/* /app-code/
+          echo "✅ Code sync completed"
+        volumeMounts:
+        - name: app-code
+          mountPath: /app-code
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "128Mi"
+            cpu: "200m"
+      
+      containers:
+      - name: app
+        image: php:8.4-apache
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "false"
+        - name: APP_URL
+          value: "https://portfolio.adamchilders.com"
+        - name: DB_HOST
+          value: "mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_DATABASE
+          value: "portfolio_tracker"
+        - name: DB_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-username
+        - name: DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-password
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: CACHE_DRIVER
+          value: "redis"
+        - name: SESSION_DRIVER
+          value: "redis"
+        - name: QUEUE_CONNECTION
+          value: "redis"
+        volumeMounts:
+        - name: app-code
+          mountPath: /var/www/html
+        command:
+        - sh
+        - -c
+        - |
+          echo "🚀 Starting Portfolio Tracker with Git-synced code..."
+          
+          # Install PHP extensions
+          apt-get update && apt-get install -y \
+            libpng-dev libonig-dev libxml2-dev libzip-dev \
+            libfreetype6-dev libjpeg62-turbo-dev \
+            libicu-dev libpq-dev
+          
+          docker-php-ext-configure gd --with-freetype --with-jpeg
+          docker-php-ext-install -j$(nproc) pdo_mysql mbstring exif pcntl bcmath gd zip intl opcache
+          
+          # Install Composer
+          curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer
+          
+          # Install dependencies
+          cd /var/www/html && composer install --no-dev --optimize-autoloader
+          
+          # Set permissions
+          chown -R www-data:www-data /var/www/html
+          chmod -R 755 /var/www/html
+          
+          # Configure Apache
+          a2enmod rewrite headers
+          echo '<VirtualHost *:80>
+              DocumentRoot /var/www/html/public
+              <Directory /var/www/html/public>
+                  AllowOverride All
+                  Require all granted
+              </Directory>
+          </VirtualHost>' > /etc/apache2/sites-available/000-default.conf
+          
+          # Start Apache
+          apache2-foreground
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      
+      volumes:
+      - name: app-code
+        emptyDir: {}
+      
+      restartPolicy: Always
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-tracker-app-service
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  selector:
+    app: portfolio-tracker
+    component: app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portfolio-tracker-ingress
+  namespace: portfolio-tracker
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - portfolio.adamchilders.com
+    secretName: portfolio-tracker-tls
+  rules:
+  - host: portfolio.adamchilders.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portfolio-tracker-app-service
+            port:
+              number: 80

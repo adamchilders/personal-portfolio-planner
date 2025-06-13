@@ -34,6 +34,11 @@ data:
   backup-enabled: "true"
   health-check-enabled: "true"
 
+  # Git Deployment Configuration
+  git-branch: "main"                    # Change this to deploy different branches/tags
+  git-sync-interval: "60"               # How often to check for updates (seconds)
+  git-auto-sync: "true"                 # Enable/disable automatic git sync
+
 ---
 apiVersion: v1
 kind: ConfigMap

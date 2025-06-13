@@ -1,280 +1,126 @@
 #!/bin/bash
 
-# Portfolio Tracker Rancher Deployment Script
-# This script deploys the Portfolio Tracker application to a dedicated namespace
+# Portfolio Tracker Git-based Deployment Script
+# Usage: ./deploy.sh [branch/tag] [sync-interval]
 
 set -e
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
-
-# Configuration
 NAMESPACE="portfolio-tracker"
-APP_NAME="portfolio-tracker"
+BRANCH_OR_TAG="${1:-main}"
+SYNC_INTERVAL="${2:-60}"
 
-# Logging functions
-log() {
-    echo -e "${BLUE}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} $1"
+echo "🚀 Portfolio Tracker Git Deployment Manager"
+echo "============================================="
+
+# Function to update git branch/tag
+update_git_config() {
+    local branch="$1"
+    local interval="$2"
+
+    echo "📝 Updating git configuration..."
+    echo "   Branch/Tag: $branch"
+    echo "   Sync Interval: ${interval}s"
+
+    # Update the ConfigMap
+    kubectl patch configmap portfolio-config -n $NAMESPACE --type merge -p "{\"data\":{\"git-branch\":\"$branch\",\"git-sync-interval\":\"$interval\"}}"
+
+    echo "✅ Git configuration updated"
 }
 
-log_success() {
-    echo -e "${GREEN}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ✅ $1"
+# Function to restart deployment
+restart_deployment() {
+    echo "🔄 Restarting deployment to apply changes..."
+    kubectl rollout restart deployment portfolio-tracker-app -n $NAMESPACE
+
+    echo "⏳ Waiting for rollout to complete..."
+    kubectl rollout status deployment portfolio-tracker-app -n $NAMESPACE --timeout=300s
+
+    echo "✅ Deployment restarted successfully"
 }
 
-log_warning() {
-    echo -e "${YELLOW}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ⚠️  $1"
-}
+# Function to check deployment status
+check_status() {
+    echo "📊 Current deployment status:"
+    echo "----------------------------"
 
-log_error() {
-    echo -e "${RED}[$(date +'%Y-%m-%d %H:%M:%S')]${NC} ❌ $1"
-}
+    # Get current git config
+    CURRENT_BRANCH=$(kubectl get configmap portfolio-config -n $NAMESPACE -o jsonpath='{.data.git-branch}')
+    CURRENT_INTERVAL=$(kubectl get configmap portfolio-config -n $NAMESPACE -o jsonpath='{.data.git-sync-interval}')
 
-# Check if kubectl is available
-check_kubectl() {
-    if ! command -v kubectl &> /dev/null; then
-        log_error "kubectl is not installed or not in PATH"
-        exit 1
-    fi
-    
-    # Test kubectl connection
-    if ! kubectl cluster-info &> /dev/null; then
-        log_error "Cannot connect to Kubernetes cluster"
-        exit 1
-    fi
-    
-    log_success "kubectl is available and connected"
-}
+    echo "   Git Branch/Tag: $CURRENT_BRANCH"
+    echo "   Sync Interval: ${CURRENT_INTERVAL}s"
 
-# Create namespace
-create_namespace() {
-    log "Creating namespace: $NAMESPACE"
-    
-    if kubectl get namespace "$NAMESPACE" &> /dev/null; then
-        log_warning "Namespace $NAMESPACE already exists"
-    else
-        kubectl apply -f namespace.yaml
-        log_success "Namespace $NAMESPACE created"
-    fi
-}
-
-# Create secrets
-create_secrets() {
-    log "Creating application secrets..."
-    
-    # Check if secrets already exist
-    if kubectl get secret portfolio-secrets -n "$NAMESPACE" &> /dev/null; then
-        log_warning "Secrets already exist. Delete them first if you want to recreate:"
-        log "kubectl delete secret portfolio-secrets -n $NAMESPACE"
-        return 0
-    fi
-    
-    # Generate secure passwords
-    DB_PASSWORD=$(openssl rand -base64 32)
-    REDIS_PASSWORD=$(openssl rand -base64 32)
-    APP_KEY=$(openssl rand -base64 32)
-    JWT_SECRET=$(openssl rand -hex 64)
-    
-    # Create the secret
-    kubectl create secret generic portfolio-secrets \
-        --namespace="$NAMESPACE" \
-        --from-literal=db-username=portfolio_user \
-        --from-literal=db-password="$DB_PASSWORD" \
-        --from-literal=redis-password="$REDIS_PASSWORD" \
-        --from-literal=app-key="$APP_KEY" \
-        --from-literal=jwt-secret="$JWT_SECRET"
-    
-    log_success "Secrets created successfully"
-    log "📝 Generated credentials (save these securely):"
-    log "   DB Password: $DB_PASSWORD"
-    log "   Redis Password: $REDIS_PASSWORD"
-    log "   App Key: $APP_KEY"
-    log "   JWT Secret: $JWT_SECRET"
-}
-
-# Deploy application
-deploy_application() {
-    log "Deploying Portfolio Tracker application..."
-
-    # Apply MySQL and Redis first
-    log "Deploying MySQL and Redis..."
-    if kubectl apply -f mysql.yaml; then
-        log_success "MySQL and Redis manifests applied"
-    else
-        log_error "Failed to apply MySQL and Redis manifests"
-        exit 1
-    fi
-
-    # Wait for MySQL to be ready
-    log "Waiting for MySQL to be ready..."
-    if kubectl wait --for=condition=available --timeout=300s deployment/mysql -n "$NAMESPACE"; then
-        log_success "MySQL is ready"
-    else
-        log_warning "MySQL deployment timeout - checking status..."
-        kubectl get pods -l component=mysql -n "$NAMESPACE"
-        kubectl logs -l component=mysql -n "$NAMESPACE" --tail=10
-    fi
-
-    # Wait for Redis to be ready
-    log "Waiting for Redis to be ready..."
-    if kubectl wait --for=condition=available --timeout=300s deployment/redis -n "$NAMESPACE"; then
-        log_success "Redis is ready"
-    else
-        log_warning "Redis deployment timeout - checking status..."
-        kubectl get pods -l component=redis -n "$NAMESPACE"
-        kubectl logs -l component=redis -n "$NAMESPACE" --tail=10
-    fi
-
-    # Apply ConfigMaps
-    log "Applying ConfigMaps..."
-    kubectl apply -f configmap.yaml
-
-    # Apply Deployments and Services
-    log "Applying Application..."
-    kubectl apply -f deployment.yaml
-
-    log_success "Application deployed successfully"
-}
-
-# Wait for deployment
-wait_for_deployment() {
-    log "Waiting for deployments to be ready..."
-    
-    # Wait for app deployment
-    log "Waiting for app deployment..."
-    kubectl wait --for=condition=available --timeout=300s deployment/portfolio-tracker-app -n "$NAMESPACE"
-    
-    # Wait for nginx deployment
-    log "Waiting for nginx deployment..."
-    kubectl wait --for=condition=available --timeout=300s deployment/portfolio-tracker-nginx -n "$NAMESPACE"
-    
-    log_success "All deployments are ready"
-}
-
-# Show status
-show_status() {
-    log "📊 Deployment Status:"
+    # Get pod status
     echo ""
-    
-    echo "=== Namespace ==="
-    kubectl get namespace "$NAMESPACE"
-    echo ""
-    
-    echo "=== Pods ==="
-    kubectl get pods -n "$NAMESPACE"
-    echo ""
-    
-    echo "=== Services ==="
-    kubectl get services -n "$NAMESPACE"
-    echo ""
-    
-    echo "=== Deployments ==="
-    kubectl get deployments -n "$NAMESPACE"
-    echo ""
+    kubectl get pods -l component=app -n $NAMESPACE
 
-    echo "=== Persistent Volume Claims ==="
-    kubectl get pvc -n "$NAMESPACE"
+    # Get recent git sync logs
     echo ""
-    
-    # Get service details for access information
-    NGINX_SERVICE=$(kubectl get service portfolio-tracker-nginx-service -n "$NAMESPACE" -o jsonpath='{.status.loadBalancer.ingress[0].ip}' 2>/dev/null || echo "pending")
-    
-    if [ "$NGINX_SERVICE" != "pending" ] && [ -n "$NGINX_SERVICE" ]; then
-        log_success "🌐 Application is accessible at: http://$NGINX_SERVICE"
-    else
-        log_warning "🌐 LoadBalancer IP is still pending. Check with:"
-        log "kubectl get service portfolio-tracker-nginx-service -n $NAMESPACE"
-    fi
-    
-    log "📋 Default admin credentials:"
-    log "   Username: admin"
-    log "   Email: admin@portfolio-tracker.local"
-    log "   Password: admin123"
-    log "   ⚠️  Change these immediately after first login!"
-}
-
-# Show logs
-show_logs() {
-    log "📋 Recent application logs:"
-    kubectl logs -l app=portfolio-tracker,component=app -n "$NAMESPACE" --tail=20
-}
-
-# Clean up deployment
-cleanup() {
-    log "🧹 Cleaning up Portfolio Tracker deployment..."
-    
-    read -p "Are you sure you want to delete the entire $NAMESPACE namespace? (y/N): " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        kubectl delete namespace "$NAMESPACE"
-        log_success "Namespace $NAMESPACE deleted"
-    else
-        log "Cleanup cancelled"
+    echo "📋 Recent git-sync activity:"
+    POD_NAME=$(kubectl get pods -l component=app -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
+    if [ ! -z "$POD_NAME" ]; then
+        kubectl logs $POD_NAME -n $NAMESPACE -c git-sync --tail=5 2>/dev/null || echo "   Git-sync logs not available yet"
     fi
 }
 
-# Main deployment function
-deploy() {
-    log "🚀 Starting Portfolio Tracker deployment to namespace: $NAMESPACE"
-    
-    check_kubectl
-    create_namespace
-    create_secrets
-    deploy_application
-    wait_for_deployment
-    show_status
+# Function to show help
+show_help() {
+    echo "Portfolio Tracker Git Deployment Manager"
+    echo ""
+    echo "USAGE:"
+    echo "  ./deploy.sh [COMMAND] [OPTIONS]"
+    echo ""
+    echo "COMMANDS:"
+    echo "  deploy <branch/tag> [interval]  Deploy specific branch or tag"
+    echo "  status                          Show current deployment status"
+    echo "  logs                           Show git-sync logs"
+    echo "  help                           Show this help message"
+    echo ""
+    echo "EXAMPLES:"
+    echo "  ./deploy.sh deploy main         Deploy main branch"
+    echo "  ./deploy.sh deploy v2.0.1       Deploy tag v2.0.1"
+    echo "  ./deploy.sh deploy dev 30       Deploy dev branch, sync every 30s"
+    echo "  ./deploy.sh status              Check current status"
+    echo ""
+    echo "QUICK DEPLOYMENT EXAMPLES:"
+    echo "  Production:  ./deploy.sh deploy v2.0.1 300    # Stable tag, 5min sync"
+    echo "  Staging:     ./deploy.sh deploy main 60       # Latest main, 1min sync"
+    echo "  Development: ./deploy.sh deploy dev 30        # Dev branch, 30s sync"
 }
 
-# Show usage
-usage() {
-    echo "Portfolio Tracker Rancher Deployment Script"
-    echo ""
-    echo "Usage: $0 [COMMAND]"
-    echo ""
-    echo "Commands:"
-    echo "  deploy    - Deploy the application (default)"
-    echo "  status    - Show deployment status"
-    echo "  logs      - Show application logs"
-    echo "  cleanup   - Delete the entire deployment"
-    echo "  help      - Show this help message"
-    echo ""
-    echo "Examples:"
-    echo "  $0 deploy"
-    echo "  $0 status"
-    echo "  $0 logs"
-}
-
-# Main command handler
-main() {
-    local command="${1:-deploy}"
-    
-    case "$command" in
-        deploy)
-            deploy
-            ;;
-        status)
-            show_status
-            ;;
-        logs)
-            show_logs
-            ;;
-        cleanup)
-            cleanup
-            ;;
-        help|--help|-h)
-            usage
-            ;;
-        *)
-            log_error "Unknown command: $command"
-            echo ""
-            usage
+# Main script logic
+case "${1:-help}" in
+    "deploy")
+        if [ -z "$2" ]; then
+            echo "❌ Error: Branch or tag required"
+            echo "Usage: ./deploy.sh deploy <branch/tag> [sync-interval]"
             exit 1
-            ;;
-    esac
-}
+        fi
+        BRANCH_OR_TAG="$2"
+        SYNC_INTERVAL="${3:-60}"
+        update_git_config "$BRANCH_OR_TAG" "$SYNC_INTERVAL"
+        restart_deployment
+        echo ""
+        check_status
+        echo ""
+        echo "🎉 Deployment complete!"
+        echo "📱 Visit: https://portfolio.adamchilders.com"
+        ;;
+    "status")
+        check_status
+        ;;
+    "logs")
+        echo "📋 Git-sync logs (last 20 lines):"
+        POD_NAME=$(kubectl get pods -l component=app -n $NAMESPACE -o jsonpath='{.items[0].metadata.name}')
+        if [ ! -z "$POD_NAME" ]; then
+            kubectl logs $POD_NAME -n $NAMESPACE -c git-sync --tail=20 -f
+        else
+            echo "❌ No pods found"
+        fi
+        ;;
+    "help"|*)
+        show_help
+        ;;
+esac
 
-# Run main function with all arguments
-main "$@"
+
