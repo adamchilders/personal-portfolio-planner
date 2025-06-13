@@ -366,16 +366,17 @@ class PortfolioCharts {
      */
     generateSectorData(holdings) {
         const sectors = {};
-        
+
         holdings.forEach(holding => {
-            const sector = this.getMockSector(holding.symbol);
+            // Use real sector data if available, fallback to mock
+            const sector = holding.sector || this.getMockSector(holding.symbol);
             sectors[sector] = (sectors[sector] || 0) + holding.current_value;
         });
-        
+
         const labels = Object.keys(sectors);
         const data = Object.values(sectors);
         const colors = labels.map((_, index) => this.sectorColors[index % this.sectorColors.length]);
-        
+
         return {
             labels,
             datasets: [{

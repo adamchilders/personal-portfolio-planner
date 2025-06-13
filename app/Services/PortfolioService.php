@@ -187,6 +187,8 @@ class PortfolioService
             $holdingsData[] = [
                 'symbol' => $holding->stock_symbol,
                 'name' => $holding->stock?->name ?? $holding->stock_symbol,
+                'sector' => $holding->stock?->sector ?? 'Other',
+                'industry' => $holding->stock?->industry ?? 'Unknown',
                 'quantity' => $holding->quantity,
                 'avg_cost_basis' => $holding->avg_cost_basis,
                 'current_price' => $holding->stock?->quote?->current_price ?? 0,

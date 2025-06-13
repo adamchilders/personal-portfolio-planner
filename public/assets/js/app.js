@@ -841,7 +841,7 @@ class PortfolioApp {
         window.portfolioCharts.createSectorChart('sectorChart', sectorData);
     }
 
-    initializeDashboardCharts(portfolios) {
+    async initializeDashboardCharts(portfolios) {
         // Check if portfolios have any value
         const totalValue = portfolios.reduce((sum, p) => sum + (p.total_value || 0), 0);
 
@@ -852,20 +852,116 @@ class PortfolioApp {
             return;
         }
 
-        // Create overview performance chart
-        const overviewData = this.generateDashboardOverviewData(portfolios);
-        window.portfolioCharts.createPerformanceChart('dashboardOverviewChart', overviewData);
+        // Create overview performance chart with real data
+        try {
+            const overviewData = await this.generateDashboardOverviewData(portfolios);
+            window.portfolioCharts.createPerformanceChart('dashboardOverviewChart', overviewData);
+        } catch (error) {
+            console.error('Error creating dashboard overview chart:', error);
+            // Fallback to mock data
+            const mockData = window.portfolioCharts.generateMockPerformanceData(30);
+            window.portfolioCharts.createPerformanceChart('dashboardOverviewChart', mockData);
+        }
 
         // Create portfolio allocation chart
         const allocationData = this.generatePortfolioAllocationData(portfolios);
         window.portfolioCharts.createSectorChart('portfolioAllocationChart', allocationData);
     }
 
-    generateDashboardOverviewData(portfolios) {
-        // For now, generate mock data for total portfolio value over time
-        // TODO: Implement real aggregated portfolio performance data
-        const totalValue = portfolios.reduce((sum, p) => sum + p.total_value, 0);
+    async generateDashboardOverviewData(portfolios) {
+        // Get real aggregated portfolio performance data
+        try {
+            const portfoliosWithValue = portfolios.filter(p => (p.total_value || 0) > 0);
+
+            if (portfoliosWithValue.length === 0) {
+                return window.portfolioCharts.generateMockPerformanceData(30);
+            }
+
+            // Fetch performance data for all portfolios
+            const performancePromises = portfoliosWithValue.map(portfolio =>
+                this.apiCall(`/portfolios/${portfolio.id}/performance?days=30`)
+            );
+
+            const performanceResponses = await Promise.all(performancePromises);
+
+            // Aggregate the data across all portfolios
+            const aggregatedData = this.aggregatePortfolioPerformance(performanceResponses, portfoliosWithValue);
+
+            if (aggregatedData && aggregatedData.labels && aggregatedData.labels.length > 0) {
+                return {
+                    labels: aggregatedData.labels,
+                    datasets: [
+                        {
+                            label: 'Total Portfolio Value',
+                            data: aggregatedData.portfolio_values,
+                            borderColor: window.portfolioCharts.chartColors.primary,
+                            backgroundColor: window.portfolioCharts.chartColors.primary + '20',
+                            fill: true
+                        },
+                        {
+                            label: 'Total Cost Basis',
+                            data: aggregatedData.cost_basis_values,
+                            borderColor: window.portfolioCharts.chartColors.info,
+                            backgroundColor: window.portfolioCharts.chartColors.info + '20',
+                            fill: false,
+                            borderDash: [5, 5]
+                        }
+                    ]
+                };
+            }
+        } catch (error) {
+            console.error('Error generating dashboard overview data:', error);
+        }
+
+        // Fallback to mock data
         return window.portfolioCharts.generateMockPerformanceData(30);
+    }
+
+    aggregatePortfolioPerformance(performanceResponses, portfolios) {
+        try {
+            // Filter successful responses
+            const validResponses = performanceResponses.filter(response =>
+                response && response.success && response.data && response.data.labels
+            );
+
+            if (validResponses.length === 0) {
+                return null;
+            }
+
+            // Use the first response as the base for labels (assuming all have same dates)
+            const baseData = validResponses[0].data;
+            const labels = baseData.labels;
+
+            // Initialize aggregated arrays
+            const aggregatedPortfolioValues = new Array(labels.length).fill(0);
+            const aggregatedCostBasisValues = new Array(labels.length).fill(0);
+
+            // Sum up values from all portfolios for each date
+            validResponses.forEach(response => {
+                const data = response.data;
+                if (data.portfolio_values && data.cost_basis_values) {
+                    data.portfolio_values.forEach((value, index) => {
+                        if (index < aggregatedPortfolioValues.length) {
+                            aggregatedPortfolioValues[index] += value || 0;
+                        }
+                    });
+                    data.cost_basis_values.forEach((value, index) => {
+                        if (index < aggregatedCostBasisValues.length) {
+                            aggregatedCostBasisValues[index] += value || 0;
+                        }
+                    });
+                }
+            });
+
+            return {
+                labels: labels,
+                portfolio_values: aggregatedPortfolioValues,
+                cost_basis_values: aggregatedCostBasisValues
+            };
+        } catch (error) {
+            console.error('Error aggregating portfolio performance:', error);
+            return null;
+        }
     }
 
     generatePortfolioAllocationData(portfolios) {
@@ -2036,22 +2132,22 @@ class PortfolioApp {
     }
 
     calculateSectorAllocation(holdings) {
-        // Simplified sector calculation - in a real app, this would use actual sector data
+        // Use real sector data from holdings
         const sectors = {};
         holdings.forEach(holding => {
-            const sector = this.getMockSector(holding.symbol);
+            const sector = holding.sector || this.getMockSector(holding.symbol);
             sectors[sector] = (sectors[sector] || 0) + holding.weight;
         });
         return sectors;
     }
 
     getMockSector(symbol) {
-        // Mock sector assignment based on symbol
+        // Fallback mock sector assignment based on symbol (only used when real data unavailable)
         const sectorMap = {
             'A': 'Technology', 'B': 'Healthcare', 'C': 'Finance', 'D': 'Consumer',
             'E': 'Energy', 'F': 'Finance', 'G': 'Technology', 'H': 'Healthcare',
             'I': 'Industrial', 'J': 'Consumer', 'K': 'Technology', 'L': 'Healthcare',
-            'M': 'Technology', 'N': 'Energy', 'O': 'Industrial', 'P': 'Healthcare',
+            'M': 'Consumer Staples', 'N': 'Energy', 'O': 'Industrial', 'P': 'Healthcare',
             'Q': 'Technology', 'R': 'Consumer', 'S': 'Technology', 'T': 'Technology',
             'U': 'Utilities', 'V': 'Healthcare', 'W': 'Consumer', 'X': 'Technology',
             'Y': 'Technology', 'Z': 'Technology'
