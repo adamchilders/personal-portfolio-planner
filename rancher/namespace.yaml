@@ -47,23 +47,24 @@ spec:
     - podSelector:
         matchLabels:
           app: portfolio-tracker
-  # Allow traffic from ingress controllers (common namespaces and labels)
+  # Allow traffic from RKE2 ingress controllers in kube-system namespace
   - from:
     - namespaceSelector:
         matchLabels:
-          name: ingress-nginx
+          kubernetes.io/metadata.name: kube-system
+  # Allow traffic from any kube-system namespace (alternative selector)
   - from:
-    - namespaceSelector:
+    - namespaceSelector: {}
+      podSelector:
         matchLabels:
-          name: kube-system
+          app.kubernetes.io/name: rke2-ingress-nginx
+  # Allow traffic from RKE2 ingress nginx pods
   - from:
-    - podSelector:
-        matchLabels:
-          app.kubernetes.io/name: ingress-nginx
-  # Allow traffic from any pod with ingress controller labels
-  - from:
-    - podSelector:
-        matchLabels:
-          app: ingress-nginx
+    - namespaceSelector: {}
+      podSelector:
+        matchExpressions:
+        - key: app.kubernetes.io/name
+          operator: In
+          values: ["rke2-ingress-nginx", "ingress-nginx"]
   egress:
   - {} # Allow all egress traffic (for database, redis, external APIs)
