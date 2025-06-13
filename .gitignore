@@ -116,3 +116,8 @@ docker-compose*.yml
 # Deployment scripts (removed for Rancher deployment)
 bin/deploy.sh
 bin/validate-deployment.sh
+
+# AI Assistant context files (not for version control)
+.ai-context/
+.ai-notes/
+.assistant-context/

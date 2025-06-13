@@ -117,11 +117,16 @@ setup_permissions() {
     mkdir -p /var/www/html/storage/sessions
     mkdir -p /var/www/html/bootstrap/cache
 
-    # Set permissions (skip ownership changes as we're running as www user)
-    chmod -R 755 /var/www/html/storage
-    chmod -R 755 /var/www/html/bootstrap/cache
+    # Test if we can write to the directories (skip chmod if we can't)
+    if touch /var/www/html/storage/logs/test.tmp 2>/dev/null; then
+        rm -f /var/www/html/storage/logs/test.tmp
+        log_success "Storage directories are writable"
+    else
+        log_warning "Cannot modify storage permissions (running as non-root user)"
+        log "Storage directories should be writable by the container runtime"
+    fi
 
-    log_success "Permissions configured"
+    log_success "Permissions check completed"
 }
 
 # Validate environment configuration

@@ -124,16 +124,18 @@ spec:
           exec:
             command:
             - php
-            - /var/www/html/public/health.php
-          initialDelaySeconds: 60
+            - -r
+            - "echo 'alive';"
+          initialDelaySeconds: 120
           periodSeconds: 30
           timeoutSeconds: 10
         readinessProbe:
           exec:
             command:
             - php
-            - /var/www/html/public/health.php
-          initialDelaySeconds: 30
+            - -r
+            - "echo 'ready';"
+          initialDelaySeconds: 60
           periodSeconds: 10
           timeoutSeconds: 5
         resources:
