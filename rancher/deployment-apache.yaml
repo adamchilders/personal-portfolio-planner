@@ -20,7 +20,7 @@ spec:
     spec:
       containers:
       - name: app
-        image: adamchilders/portfolio-tracker:v2.0.0
+        image: adamchilders/portfolio-tracker:v2.0.1
         imagePullPolicy: Always
         ports:
         - containerPort: 80
