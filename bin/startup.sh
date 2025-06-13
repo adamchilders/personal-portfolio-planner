@@ -230,10 +230,10 @@ main() {
     
     log_success "🎉 Portfolio Tracker startup completed successfully!"
     
-    # If this is the main container process, start PHP-FPM
-    if [ "$1" = "php-fpm" ] || [ -z "$1" ]; then
-        log "Starting PHP-FPM..."
-        exec php-fpm
+    # If this is the main container process, start Apache
+    if [ "$1" = "apache2-foreground" ] || [ -z "$1" ]; then
+        log "Starting Apache..."
+        exec apache2-foreground
     else
         # Execute the provided command
         log "Executing command: $*"

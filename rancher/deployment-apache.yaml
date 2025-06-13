@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: portfolio-tracker-app
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: portfolio-tracker
+      component: app
+  template:
+    metadata:
+      labels:
+        app: portfolio-tracker
+        component: app
+    spec:
+      containers:
+      - name: app
+        image: adamchilders/portfolio-tracker:v2.0.0
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+          name: http
+        env:
+        - name: APP_ENV
+          value: "production"
+        - name: APP_DEBUG
+          value: "false"
+        - name: APP_URL
+          value: "https://portfolio.adamchilders.com"
+        - name: DB_HOST
+          value: "mysql"
+        - name: DB_PORT
+          value: "3306"
+        - name: DB_DATABASE
+          value: "portfolio_tracker"
+        - name: DB_USERNAME
+          value: "portfolio_user"
+        - name: DB_PASSWORD
+          value: "secure_password_123"
+        - name: REDIS_HOST
+          value: "redis"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: CACHE_DRIVER
+          value: "redis"
+        - name: SESSION_DRIVER
+          value: "redis"
+        - name: QUEUE_CONNECTION
+          value: "redis"
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: portfolio-tracker-app-service
+  namespace: portfolio-tracker
+  labels:
+    app: portfolio-tracker
+    component: app
+spec:
+  selector:
+    app: portfolio-tracker
+    component: app
+  ports:
+  - name: http
+    port: 80
+    targetPort: 80
+    protocol: TCP
+  type: ClusterIP
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: portfolio-tracker-ingress
+  namespace: portfolio-tracker
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+spec:
+  tls:
+  - hosts:
+    - portfolio.adamchilders.com
+    secretName: portfolio-tracker-tls
+  rules:
+  - host: portfolio.adamchilders.com
+    http:
+      paths:
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: portfolio-tracker-app-service
+            port:
+              number: 80
+</apiVersion>
