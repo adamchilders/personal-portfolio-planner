@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\User;
 use App\Models\UserSession;
+use App\Helpers\DateTimeHelper;
 use Exception;
 
 class AuthService
@@ -87,15 +88,33 @@ class AuthService
      */
     public function getUserFromSession(string $sessionToken): ?User
     {
+        // First try to find a valid session
         $session = UserSession::findByToken($sessionToken);
-        
+
         if (!$session) {
-            return null;
+            // If no valid session found, try to find any session with this token
+            // (including expired ones) and check if it's recently expired
+            $session = UserSession::where('session_token', $sessionToken)->first();
+
+            if (!$session) {
+                return null;
+            }
+
+            // If session expired less than 24 hours ago, allow renewal
+            $expiredTime = $session->expires_at;
+            $now = DateTimeHelper::now();
+            $hoursSinceExpired = ($now->getTimestamp() - $expiredTime->getTimestamp()) / 3600;
+
+            if ($hoursSinceExpired > 24) {
+                // Session is too old, don't renew
+                return null;
+            }
         }
-        
-        // Update session activity
+
+        // Update session activity and extend expiration
         $session->updateActivity();
-        
+        $session->extend(self::SESSION_LIFETIME_MINUTES);
+
         return $session->user;
     }
     

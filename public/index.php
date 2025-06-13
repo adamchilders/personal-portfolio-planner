@@ -36,6 +36,9 @@ $errorMiddleware = $app->addErrorMiddleware(
     true
 );
 
+// Add CORS middleware (must be added before routing)
+$app->add($container->get(\App\Middleware\CorsMiddleware::class));
+
 // Add routing middleware
 $app->addRoutingMiddleware();
 

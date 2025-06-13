@@ -16,6 +16,7 @@ use App\Controllers\PortfolioController;
 use App\Controllers\StockController;
 use App\Middleware\AuthMiddleware;
 use App\Middleware\AdminMiddleware;
+use App\Middleware\CorsMiddleware;
 use Slim\Psr7\Factory\ResponseFactory;
 
 /** @var Container $container */
@@ -140,6 +141,10 @@ $container->set(AdminMiddleware::class, function ($container) {
     return new AdminMiddleware($container->get(ResponseFactory::class));
 });
 
+$container->set(CorsMiddleware::class, function () {
+    return new CorsMiddleware();
+});
+
 // Middleware aliases for Slim
 $container->set('AuthMiddleware', function ($container) {
     return $container->get(AuthMiddleware::class);
@@ -147,6 +152,10 @@ $container->set('AuthMiddleware', function ($container) {
 
 $container->set('AdminMiddleware', function ($container) {
     return $container->get(AdminMiddleware::class);
+});
+
+$container->set('CorsMiddleware', function ($container) {
+    return $container->get(CorsMiddleware::class);
 });
 
 return $container;

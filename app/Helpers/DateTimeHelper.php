@@ -10,19 +10,19 @@ use DateTimeInterface;
 class DateTimeHelper
 {
     /**
-     * Get current DateTime instance
+     * Get current DateTime instance in UTC
      */
     public static function now(): DateTime
     {
-        return new DateTime();
+        return new DateTime('now', new \DateTimeZone('UTC'));
     }
     
     /**
-     * Create DateTime from string
+     * Create DateTime from string in UTC
      */
     public static function create(string $time = 'now'): DateTime
     {
-        return new DateTime($time);
+        return new DateTime($time, new \DateTimeZone('UTC'));
     }
     
     /**

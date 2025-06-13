@@ -168,14 +168,27 @@ class PortfolioApp {
         try {
             this.showLoading('Signing in...');
 
-            // Use GET endpoint for development (POST has issues in local Docker)
-            const params = new URLSearchParams({
-                identifier: data.email,
-                password: data.password
-            });
-            const response = await this.authCall(`/auth/login-dev?${params}`, {
-                method: 'GET'
-            });
+            // Try POST first (production), fallback to GET (development)
+            let response;
+            try {
+                response = await this.authCall('/auth/login', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        identifier: data.email,
+                        password: data.password
+                    })
+                });
+            } catch (error) {
+                // Fallback to GET for development environments with POST issues
+                console.log('POST failed, trying GET fallback for development');
+                const params = new URLSearchParams({
+                    identifier: data.email,
+                    password: data.password
+                });
+                response = await this.authCall(`/auth/login?${params}`, {
+                    method: 'GET'
+                });
+            }
             
             if (response.success) {
                 this.authToken = response.token;
@@ -203,16 +216,29 @@ class PortfolioApp {
         try {
             this.showLoading('Creating account...');
 
-            const response = await this.authCall('/auth/register', {
-                method: 'POST',
-                body: JSON.stringify({
+            // Try POST first (production), fallback to GET (development)
+            let response;
+            try {
+                response = await this.authCall('/auth/register', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        username: data.username,
+                        email: data.email,
+                        password: data.password
+                    })
+                });
+            } catch (error) {
+                // Fallback to GET for development environments with POST issues
+                console.log('POST failed, trying GET fallback for development');
+                const params = new URLSearchParams({
                     username: data.username,
                     email: data.email,
-                    password: data.password,
-                    first_name: data.first_name,
-                    last_name: data.last_name
-                })
-            });
+                    password: data.password
+                });
+                response = await this.authCall(`/auth/register?${params}`, {
+                    method: 'GET'
+                });
+            }
             
             if (response.success) {
                 this.authToken = response.token;
@@ -231,19 +257,23 @@ class PortfolioApp {
     }
     
     async getCurrentUser() {
-        const response = await this.apiCall('/auth/me');
-        if (response.success) {
+        const response = await this.authCall('/auth/me');
+        if (response.user) {
             this.currentUser = response.user;
             return this.currentUser;
         }
-        throw new Error('Failed to get current user');
+        throw new Error('Failed to get current user - no user in response');
     }
     
     logout() {
+        this.clearAuthToken();
+        this.showHomepage();
+    }
+
+    clearAuthToken() {
         this.authToken = null;
         this.currentUser = null;
         localStorage.removeItem('auth_token');
-        this.showHomepage();
     }
 
     async createPortfolio(data) {
@@ -656,13 +686,19 @@ class PortfolioApp {
         const url = endpoint; // Auth endpoints don't need /api prefix
         const defaultOptions = {
             headers: {
-                'Content-Type': 'application/json'
+                'Content-Type': 'application/json',
+                ...(this.authToken && { 'Authorization': `Bearer ${this.authToken}` })
             }
         };
 
         const response = await fetch(url, { ...defaultOptions, ...options });
 
         if (!response.ok) {
+            // If unauthorized, clear the invalid token
+            if (response.status === 401) {
+                console.log('Received 401, clearing invalid token');
+                this.clearAuthToken();
+            }
             throw new Error(`HTTP error! status: ${response.status}`);
         }
 
@@ -1034,18 +1070,6 @@ class PortfolioApp {
                     </div>
 
                     <form data-form="register">
-                        <div class="grid grid-cols-2 gap-4">
-                            <div class="form-group">
-                                <label class="form-label" for="first_name">First Name</label>
-                                <input type="text" id="first_name" name="first_name" class="form-input" required>
-                            </div>
-
-                            <div class="form-group">
-                                <label class="form-label" for="last_name">Last Name</label>
-                                <input type="text" id="last_name" name="last_name" class="form-input" required>
-                            </div>
-                        </div>
-
                         <div class="form-group">
                             <label class="form-label" for="username">Username</label>
                             <input type="text" id="username" name="username" class="form-input" required>
@@ -1144,7 +1168,7 @@ class PortfolioApp {
                         <div class="flex justify-between items-center">
                             <div>
                                 <h3 style="margin-bottom: 0;">Portfolio Dashboard</h3>
-                                <p class="text-muted" style="margin-bottom: 0;">Welcome back, ${this.currentUser?.first_name || 'Investor'}!</p>
+                                <p class="text-muted" style="margin-bottom: 0;">Welcome back, ${this.currentUser?.username || 'Investor'}!</p>
                             </div>
                             <div class="flex gap-4">
                                 <button data-action="show-create-portfolio" class="btn btn-primary">+ New Portfolio</button>
