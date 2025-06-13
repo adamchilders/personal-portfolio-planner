@@ -129,9 +129,22 @@ CREATE TABLE system_events (
     context JSON,
     source VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    
+
     INDEX idx_event_type (event_type),
     INDEX idx_severity (severity),
     INDEX idx_created_at (created_at),
     INDEX idx_source (source)
+);
+
+-- Health check table (used by installer and health monitoring)
+CREATE TABLE health_check (
+    id INT PRIMARY KEY DEFAULT 1,
+    status ENUM('pending', 'installed', 'healthy', 'unhealthy') NOT NULL DEFAULT 'pending',
+    last_check TIMESTAMP NULL,
+    checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    details JSON,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    INDEX idx_status (status),
+    INDEX idx_checked_at (checked_at)
 );
