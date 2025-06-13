@@ -172,18 +172,18 @@ class PortfolioService
     public function getPortfolioSummary(Portfolio $portfolio): array
     {
         $holdings = $portfolio->holdings()->active()->with('stock.quote')->get();
-        
+
         $totalValue = 0;
         $totalCostBasis = 0;
         $holdingsData = [];
-        
+
         foreach ($holdings as $holding) {
             $currentValue = $holding->getCurrentValue();
             $costBasis = $holding->getTotalCostBasis();
-            
+
             $totalValue += $currentValue;
             $totalCostBasis += $costBasis;
-            
+
             $holdingsData[] = [
                 'symbol' => $holding->stock_symbol,
                 'name' => $holding->stock?->name ?? $holding->stock_symbol,
@@ -197,12 +197,12 @@ class PortfolioService
                 'weight' => 0 // Will be calculated after we have total value
             ];
         }
-        
+
         // Calculate weights
         foreach ($holdingsData as &$holding) {
             $holding['weight'] = $totalValue > 0 ? ($holding['current_value'] / $totalValue) * 100 : 0;
         }
-        
+
         return [
             'portfolio' => [
                 'id' => $portfolio->id,
@@ -219,6 +219,125 @@ class PortfolioService
             ],
             'holdings' => $holdingsData
         ];
+    }
+
+    /**
+     * Get historical portfolio performance data
+     */
+    public function getPortfolioHistoricalPerformance(Portfolio $portfolio, int $days = 30): array
+    {
+        $holdings = $portfolio->holdings()->active()->with('stock')->get();
+
+        if ($holdings->isEmpty()) {
+            return [
+                'labels' => [],
+                'portfolio_values' => [],
+                'cost_basis_values' => []
+            ];
+        }
+
+        // Get date range
+        $endDate = new \DateTime();
+        $startDate = (clone $endDate)->modify("-{$days} days");
+
+        $labels = [];
+        $portfolioValues = [];
+        $costBasisValues = [];
+
+        // Get all business days in the range
+        $currentDate = clone $startDate;
+        while ($currentDate <= $endDate) {
+            if ($currentDate->format('N') <= 5) { // Monday = 1, Friday = 5
+                $dateStr = $currentDate->format('Y-m-d');
+                $labels[] = $currentDate->format('M j');
+
+                $totalValue = 0;
+                $totalCostBasis = 0;
+
+                foreach ($holdings as $holding) {
+                    // Get historical price for this date
+                    $historicalPrice = $this->stockDataService->getHistoricalPrice(
+                        $holding->stock_symbol,
+                        $dateStr
+                    );
+
+                    if ($historicalPrice) {
+                        $totalValue += $holding->quantity * $historicalPrice;
+                    } else {
+                        // Fallback to current price if historical data not available
+                        $currentPrice = $holding->stock?->quote?->current_price ?? 0;
+                        $totalValue += $holding->quantity * $currentPrice;
+                    }
+
+                    $totalCostBasis += $holding->getTotalCostBasis();
+                }
+
+                $portfolioValues[] = round($totalValue, 2);
+                $costBasisValues[] = round($totalCostBasis, 2);
+            }
+
+            $currentDate->modify('+1 day');
+        }
+
+        return [
+            'labels' => $labels,
+            'portfolio_values' => $portfolioValues,
+            'cost_basis_values' => $costBasisValues
+        ];
+    }
+
+    /**
+     * Get individual stock historical performance data
+     */
+    public function getStockHistoricalPerformance(Portfolio $portfolio, int $days = 30): array
+    {
+        $holdings = $portfolio->holdings()->active()->with('stock')->get();
+
+        if ($holdings->isEmpty()) {
+            return [];
+        }
+
+        $stockPerformance = [];
+
+        foreach ($holdings as $holding) {
+            $symbol = $holding->stock_symbol;
+            $historicalData = $this->stockDataService->getHistoricalPrices($symbol, $days);
+
+            if (!empty($historicalData)) {
+                // Calculate performance over the period
+                $firstPrice = $historicalData[0]['close'] ?? 0;
+                $lastPrice = end($historicalData)['close'] ?? 0;
+
+                $performancePercent = $firstPrice > 0 ?
+                    (($lastPrice - $firstPrice) / $firstPrice) * 100 : 0;
+
+                $stockPerformance[] = [
+                    'symbol' => $symbol,
+                    'name' => $holding->stock?->name ?? $symbol,
+                    'performance_percent' => round($performancePercent, 2),
+                    'first_price' => $firstPrice,
+                    'last_price' => $lastPrice,
+                    'data_points' => count($historicalData)
+                ];
+            } else {
+                // Fallback to current gain/loss if no historical data
+                $currentValue = $holding->getCurrentValue();
+                $costBasis = $holding->getTotalCostBasis();
+                $performancePercent = $costBasis > 0 ?
+                    (($currentValue - $costBasis) / $costBasis) * 100 : 0;
+
+                $stockPerformance[] = [
+                    'symbol' => $symbol,
+                    'name' => $holding->stock?->name ?? $symbol,
+                    'performance_percent' => round($performancePercent, 2),
+                    'first_price' => 0,
+                    'last_price' => 0,
+                    'data_points' => 0
+                ];
+            }
+        }
+
+        return $stockPerformance;
     }
     
     /**

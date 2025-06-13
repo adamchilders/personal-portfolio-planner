@@ -107,6 +107,10 @@ $app->group('/api/portfolios', function ($group) {
     // Portfolio holdings and transactions
     $group->post('/{id:[0-9]+}/holdings', [PortfolioController::class, 'addHolding']);
     $group->post('/{id:[0-9]+}/transactions', [PortfolioController::class, 'addTransaction']);
+
+    // Portfolio historical data
+    $group->get('/{id:[0-9]+}/performance', [PortfolioController::class, 'getHistoricalPerformance']);
+    $group->get('/{id:[0-9]+}/stocks/performance', [PortfolioController::class, 'getStockPerformance']);
 })->add(AuthMiddleware::class);
 
 // Stock routes (protected)

@@ -394,7 +394,7 @@ class PortfolioCharts {
         const labels = holdings.map(h => h.symbol);
         const data = holdings.map(h => h.gain_loss_percent);
         const colors = data.map(value => value >= 0 ? this.chartColors.success : this.chartColors.danger);
-        
+
         return {
             labels,
             datasets: [{
@@ -405,6 +405,66 @@ class PortfolioCharts {
                 borderWidth: 1
             }]
         };
+    }
+
+    /**
+     * Create performance chart from real historical data
+     */
+    createRealPerformanceChart(canvasId, historicalData, options = {}) {
+        if (!historicalData || !historicalData.labels || historicalData.labels.length === 0) {
+            console.warn('No historical data available for performance chart');
+            return this.generateMockPerformanceData(30);
+        }
+
+        const data = {
+            labels: historicalData.labels,
+            datasets: [
+                {
+                    label: 'Portfolio Value',
+                    data: historicalData.portfolio_values,
+                    borderColor: this.chartColors.primary,
+                    backgroundColor: this.chartColors.primary + '20',
+                    fill: true
+                },
+                {
+                    label: 'Cost Basis',
+                    data: historicalData.cost_basis_values,
+                    borderColor: this.chartColors.info,
+                    backgroundColor: this.chartColors.info + '20',
+                    fill: false,
+                    borderDash: [5, 5]
+                }
+            ]
+        };
+
+        return this.createPerformanceChart(canvasId, data, options);
+    }
+
+    /**
+     * Create holdings chart from real historical performance data
+     */
+    createRealHoldingsChart(canvasId, stockPerformanceData, options = {}) {
+        if (!stockPerformanceData || stockPerformanceData.length === 0) {
+            console.warn('No stock performance data available for holdings chart');
+            return null;
+        }
+
+        const labels = stockPerformanceData.map(stock => stock.symbol);
+        const data = stockPerformanceData.map(stock => stock.performance_percent);
+        const colors = data.map(value => value >= 0 ? this.chartColors.success : this.chartColors.danger);
+
+        const chartData = {
+            labels,
+            datasets: [{
+                label: 'Performance (%)',
+                data,
+                backgroundColor: colors,
+                borderColor: colors,
+                borderWidth: 1
+            }]
+        };
+
+        return this.createHoldingsChart(canvasId, chartData, options);
     }
     
     /**

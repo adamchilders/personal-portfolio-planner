@@ -249,7 +249,55 @@ class PortfolioController
             return $this->errorResponse($response, $e->getMessage(), 400);
         }
     }
-    
+
+    /**
+     * Get portfolio historical performance data
+     */
+    public function getHistoricalPerformance(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $days = (int) ($request->getQueryParams()['days'] ?? 30);
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $historicalData = $this->portfolioService->getPortfolioHistoricalPerformance($portfolio, $days);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $historicalData
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * Get individual stock historical performance data
+     */
+    public function getStockPerformance(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $days = (int) ($request->getQueryParams()['days'] ?? 30);
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $stockPerformance = $this->portfolioService->getStockHistoricalPerformance($portfolio, $days);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $stockPerformance
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [

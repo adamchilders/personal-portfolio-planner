@@ -632,14 +632,43 @@ class PortfolioApp {
         this.updatePortfolioCharts(period);
     }
 
-    updatePortfolioCharts(period = '1M') {
+    async updatePortfolioCharts(period = '1M') {
         const days = this.getPeriodDays(period);
+        const portfolioId = this.getCurrentPortfolioId();
 
-        // Update performance chart
-        const performanceData = window.portfolioCharts.generateMockPerformanceData(days);
-        window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+        if (!portfolioId) {
+            console.warn('No portfolio ID found for chart update');
+            return;
+        }
 
-        this.showSuccess(`Charts updated for ${period} period`);
+        try {
+            // Fetch real historical data
+            const [performanceResponse, stockPerformanceResponse] = await Promise.all([
+                this.apiCall(`/portfolios/${portfolioId}/performance?days=${days}`),
+                this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=${days}`)
+            ]);
+
+            if (performanceResponse.success && performanceResponse.data) {
+                // Update performance chart with real data
+                window.portfolioCharts.createRealPerformanceChart('performanceChart', performanceResponse.data);
+            } else {
+                // Fallback to mock data
+                const performanceData = window.portfolioCharts.generateMockPerformanceData(days);
+                window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+            }
+
+            if (stockPerformanceResponse.success && stockPerformanceResponse.data) {
+                // Update holdings chart with real data
+                window.portfolioCharts.createRealHoldingsChart('holdingsChart', stockPerformanceResponse.data);
+            }
+
+            this.showSuccess(`Charts updated for ${period} period`);
+        } catch (error) {
+            console.error('Error updating charts:', error);
+            // Fallback to mock data
+            const performanceData = window.portfolioCharts.generateMockPerformanceData(days);
+            window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+        }
     }
 
     getPeriodDays(period) {
@@ -757,22 +786,59 @@ class PortfolioApp {
         }
     }
 
-    initializePortfolioCharts(portfolioData) {
+    async initializePortfolioCharts(portfolioData) {
         const holdings = portfolioData.holdings || [];
 
         if (holdings.length === 0) return;
 
-        // Performance Chart
-        const performanceData = window.portfolioCharts.generateMockPerformanceData(30);
-        window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+        const portfolioId = portfolioData.portfolio?.id;
 
-        // Sector Chart
+        if (portfolioId) {
+            try {
+                // Fetch real historical data
+                const [performanceResponse, stockPerformanceResponse] = await Promise.all([
+                    this.apiCall(`/portfolios/${portfolioId}/performance?days=30`),
+                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=30`)
+                ]);
+
+                // Performance Chart - use real data if available
+                if (performanceResponse.success && performanceResponse.data) {
+                    window.portfolioCharts.createRealPerformanceChart('performanceChart', performanceResponse.data);
+                } else {
+                    // Fallback to mock data
+                    const performanceData = window.portfolioCharts.generateMockPerformanceData(30);
+                    window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+                }
+
+                // Holdings Performance Chart - use real data if available
+                if (stockPerformanceResponse.success && stockPerformanceResponse.data) {
+                    window.portfolioCharts.createRealHoldingsChart('holdingsChart', stockPerformanceResponse.data);
+                } else {
+                    // Fallback to current holdings data
+                    const holdingsData = window.portfolioCharts.generateHoldingsData(holdings);
+                    window.portfolioCharts.createHoldingsChart('holdingsChart', holdingsData);
+                }
+            } catch (error) {
+                console.error('Error fetching historical data:', error);
+                // Fallback to mock/current data
+                const performanceData = window.portfolioCharts.generateMockPerformanceData(30);
+                window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+
+                const holdingsData = window.portfolioCharts.generateHoldingsData(holdings);
+                window.portfolioCharts.createHoldingsChart('holdingsChart', holdingsData);
+            }
+        } else {
+            // No portfolio ID, use mock data
+            const performanceData = window.portfolioCharts.generateMockPerformanceData(30);
+            window.portfolioCharts.createPerformanceChart('performanceChart', performanceData);
+
+            const holdingsData = window.portfolioCharts.generateHoldingsData(holdings);
+            window.portfolioCharts.createHoldingsChart('holdingsChart', holdingsData);
+        }
+
+        // Sector Chart (always use current holdings data)
         const sectorData = window.portfolioCharts.generateSectorData(holdings);
         window.portfolioCharts.createSectorChart('sectorChart', sectorData);
-
-        // Holdings Performance Chart
-        const holdingsData = window.portfolioCharts.generateHoldingsData(holdings);
-        window.portfolioCharts.createHoldingsChart('holdingsChart', holdingsData);
     }
 
     initializeDashboardCharts(portfolios) {
@@ -796,7 +862,8 @@ class PortfolioApp {
     }
 
     generateDashboardOverviewData(portfolios) {
-        // Generate mock data for total portfolio value over time
+        // For now, generate mock data for total portfolio value over time
+        // TODO: Implement real aggregated portfolio performance data
         const totalValue = portfolios.reduce((sum, p) => sum + p.total_value, 0);
         return window.portfolioCharts.generateMockPerformanceData(30);
     }

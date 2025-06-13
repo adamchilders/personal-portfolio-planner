@@ -607,6 +607,54 @@ class StockDataService
     }
 
     /**
+     * Get historical price for a specific date
+     */
+    public function getHistoricalPrice(string $symbol, string $date): ?float
+    {
+        try {
+            $stockPrice = StockPrice::where('symbol', $symbol)
+                ->where('price_date', $date)
+                ->first();
+
+            return $stockPrice ? (float) $stockPrice->close_price : null;
+        } catch (Exception $e) {
+            error_log("Error getting historical price for {$symbol} on {$date}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Get historical prices for a symbol over a period
+     */
+    public function getHistoricalPrices(string $symbol, int $days = 30): array
+    {
+        try {
+            $endDate = new \DateTime();
+            $startDate = (clone $endDate)->modify("-{$days} days");
+
+            $prices = StockPrice::where('symbol', $symbol)
+                ->where('price_date', '>=', $startDate->format('Y-m-d'))
+                ->where('price_date', '<=', $endDate->format('Y-m-d'))
+                ->orderBy('price_date', 'asc')
+                ->get();
+
+            return $prices->map(function ($price) {
+                return [
+                    'date' => $price->price_date,
+                    'open' => $price->open_price,
+                    'high' => $price->high_price,
+                    'low' => $price->low_price,
+                    'close' => $price->close_price,
+                    'volume' => $price->volume
+                ];
+            })->toArray();
+        } catch (Exception $e) {
+            error_log("Error getting historical prices for {$symbol}: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
      * Generate mock historical data for development
      */
     private function generateMockHistoricalData(string $symbol, int $days): bool
