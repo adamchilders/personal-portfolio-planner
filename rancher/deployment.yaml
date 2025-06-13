@@ -20,7 +20,7 @@ spec:
     spec:
       initContainers:
       - name: copy-public-files
-        image: adamchilders/portfolio-tracker:v1.0.5
+        image: adamchilders/portfolio-tracker:v1.0.6
         imagePullPolicy: Always
         command: ['sh', '-c', 'cp -r /var/www/html/public/* /shared-public/']
         volumeMounts:
@@ -35,7 +35,7 @@ spec:
             cpu: "200m"
       containers:
       - name: app
-        image: adamchilders/portfolio-tracker:v1.0.5
+        image: adamchilders/portfolio-tracker:v1.0.6
         imagePullPolicy: Always
         ports:
         - containerPort: 9000
@@ -198,7 +198,7 @@ spec:
     spec:
       initContainers:
       - name: copy-public-files
-        image: adamchilders/portfolio-tracker:v1.0.5
+        image: adamchilders/portfolio-tracker:v1.0.6
         imagePullPolicy: Always
         command: ['sh', '-c', 'cp -r /var/www/html/public/* /shared-public/ || echo "No files to copy"']
         volumeMounts:
