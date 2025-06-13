@@ -98,15 +98,27 @@ create_secrets() {
 # Deploy application
 deploy_application() {
     log "Deploying Portfolio Tracker application..."
-    
+
+    # Apply MySQL and Redis first
+    log "Deploying MySQL and Redis..."
+    kubectl apply -f mysql.yaml
+
+    # Wait for MySQL to be ready
+    log "Waiting for MySQL to be ready..."
+    kubectl wait --for=condition=available --timeout=300s deployment/mysql -n "$NAMESPACE"
+
+    # Wait for Redis to be ready
+    log "Waiting for Redis to be ready..."
+    kubectl wait --for=condition=available --timeout=300s deployment/redis -n "$NAMESPACE"
+
     # Apply ConfigMaps
     log "Applying ConfigMaps..."
     kubectl apply -f configmap.yaml
-    
+
     # Apply Deployments and Services
-    log "Applying Deployments and Services..."
+    log "Applying Application..."
     kubectl apply -f deployment.yaml
-    
+
     log_success "Application deployed successfully"
 }
 
@@ -144,6 +156,10 @@ show_status() {
     
     echo "=== Deployments ==="
     kubectl get deployments -n "$NAMESPACE"
+    echo ""
+
+    echo "=== Persistent Volume Claims ==="
+    kubectl get pvc -n "$NAMESPACE"
     echo ""
     
     # Get service details for access information
