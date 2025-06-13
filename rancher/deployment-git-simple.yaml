@@ -19,9 +19,9 @@ spec:
         component: app
     spec:
       initContainers:
-      # Git clone the specified version
+      # Git clone the specified version and install dependencies
       - name: git-clone
-        image: alpine/git:latest
+        image: composer:latest
         command:
         - sh
         - -c
@@ -48,7 +48,27 @@ spec:
           echo "✅ Successfully cloned $GIT_REF"
           echo "📁 Repository contents:"
           ls -la /app-code/
-          
+
+          # Install Composer dependencies
+          echo "📦 Installing Composer dependencies..."
+          cd /app-code
+
+          # Check if composer.json exists
+          if [ ! -f "composer.json" ]; then
+            echo "❌ No composer.json found"
+            exit 1
+          fi
+
+          # Install dependencies (skip dev dependencies for production)
+          composer install --no-dev --optimize-autoloader --no-interaction || {
+            echo "❌ Failed to install Composer dependencies"
+            exit 1
+          }
+
+          echo "✅ Composer dependencies installed"
+          echo "📦 Vendor directory:"
+          ls -la /app-code/vendor/ | head -10
+
           echo "🎯 Deployment ready!"
         env:
         - name: GIT_REF
