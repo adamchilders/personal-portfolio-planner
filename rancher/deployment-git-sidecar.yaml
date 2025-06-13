@@ -61,6 +61,7 @@ spec:
         volumeMounts:
         - name: app-code
           mountPath: /var/www/html
+          subPath: current
         resources:
           requests:
             memory: "256Mi"
@@ -87,28 +88,57 @@ spec:
       
       # Git sync sidecar - continuously pulls updates
       - name: git-sync
-        image: k8s.gcr.io/git-sync/git-sync:v3.6.3
+        image: alpine/git:latest
+        command:
+        - sh
+        - -c
+        - |
+          echo "🔄 Starting git-sync sidecar..."
+
+          # Get configuration from environment
+          REPO="https://github.com/adamchilders/personal-portfolio-planner.git"
+          BRANCH="${GIT_BRANCH:-main}"
+          INTERVAL="${GIT_SYNC_INTERVAL:-60}"
+
+          echo "📋 Configuration:"
+          echo "   Repository: $REPO"
+          echo "   Branch: $BRANCH"
+          echo "   Sync Interval: ${INTERVAL}s"
+
+          # Initial clone
+          echo "📥 Initial clone..."
+          cd /app-code
+          git clone --depth 1 --branch "$BRANCH" "$REPO" current || {
+            echo "❌ Failed to clone repository"
+            exit 1
+          }
+
+          echo "✅ Initial clone completed"
+
+          # Continuous sync loop
+          while true; do
+            echo "🔄 Syncing at $(date)..."
+            cd /app-code/current
+
+            # Fetch and reset to latest
+            git fetch origin "$BRANCH" && git reset --hard "origin/$BRANCH" || {
+              echo "⚠️ Sync failed, retrying in ${INTERVAL}s..."
+            }
+
+            echo "✅ Sync completed, sleeping for ${INTERVAL}s..."
+            sleep "$INTERVAL"
+          done
         env:
-        - name: GIT_SYNC_REPO
-          value: "https://github.com/adamchilders/personal-portfolio-planner.git"
-        - name: GIT_SYNC_BRANCH
+        - name: GIT_BRANCH
           valueFrom:
             configMapKeyRef:
               name: portfolio-config
               key: git-branch
-              optional: false
-        - name: GIT_SYNC_ROOT
-          value: "/app-code"
-        - name: GIT_SYNC_DEST
-          value: "current"
-        - name: GIT_SYNC_WAIT
+        - name: GIT_SYNC_INTERVAL
           valueFrom:
             configMapKeyRef:
               name: portfolio-config
               key: git-sync-interval
-              optional: true
-        - name: GIT_SYNC_ONE_TIME
-          value: "false"
         volumeMounts:
         - name: app-code
           mountPath: /app-code
