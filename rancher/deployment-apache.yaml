@@ -39,9 +39,15 @@ spec:
         - name: DB_DATABASE
           value: "portfolio_tracker"
         - name: DB_USERNAME
-          value: "portfolio_user"
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-username
         - name: DB_PASSWORD
-          value: "secure_password_123"
+          valueFrom:
+            secretKeyRef:
+              name: portfolio-secrets
+              key: db-password
         - name: REDIS_HOST
           value: "redis"
         - name: REDIS_PORT
