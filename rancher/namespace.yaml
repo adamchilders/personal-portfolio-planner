@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: portfolio-tracker
+  labels:
+    name: portfolio-tracker
+    app: portfolio-tracker
+    environment: production
+---
+# Optional: Resource quota for the namespace
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: portfolio-tracker-quota
+  namespace: portfolio-tracker
+spec:
+  hard:
+    requests.cpu: "2"
+    requests.memory: 4Gi
+    limits.cpu: "4"
+    limits.memory: 8Gi
+    persistentvolumeclaims: "10"
+    pods: "10"
+    services: "5"
+    secrets: "10"
+    configmaps: "10"
+---
+# Optional: Network policy for security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: portfolio-tracker-network-policy
+  namespace: portfolio-tracker
+spec:
+  podSelector:
+    matchLabels:
+      app: portfolio-tracker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: portfolio-tracker
+    - podSelector:
+        matchLabels:
+          app: portfolio-tracker
+  egress:
+  - {} # Allow all egress traffic (for database, redis, external APIs)

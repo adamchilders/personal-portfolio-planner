@@ -2,6 +2,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: portfolio-tracker-app
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
     component: app
@@ -17,9 +18,18 @@ spec:
         app: portfolio-tracker
         component: app
     spec:
+      initContainers:
+      - name: copy-public-files
+        image: adamchilders/portfolio-tracker:latest
+        imagePullPolicy: Always
+        command: ['sh', '-c', 'cp -r /var/www/html/public/* /shared-public/']
+        volumeMounts:
+        - name: app-public
+          mountPath: /shared-public
       containers:
       - name: app
         image: adamchilders/portfolio-tracker:latest
+        imagePullPolicy: Always
         ports:
         - containerPort: 9000
           name: php-fpm
@@ -101,6 +111,8 @@ spec:
           mountPath: /var/www/html/storage/cache
         - name: storage-sessions
           mountPath: /var/www/html/storage/sessions
+        - name: app-public
+          mountPath: /var/www/html/public
         livenessProbe:
           exec:
             command:
@@ -131,6 +143,8 @@ spec:
         emptyDir: {}
       - name: storage-sessions
         emptyDir: {}
+      - name: app-public
+        emptyDir: {}
       restartPolicy: Always
 
 ---
@@ -138,6 +152,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: portfolio-tracker-app-service
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
     component: app
@@ -156,6 +171,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: portfolio-tracker-nginx
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
     component: nginx
@@ -203,6 +219,7 @@ apiVersion: v1
 kind: Service
 metadata:
   name: portfolio-tracker-nginx-service
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
     component: nginx

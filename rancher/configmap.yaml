@@ -2,6 +2,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: portfolio-config
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
 data:
@@ -38,6 +39,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: nginx-config
+  namespace: portfolio-tracker
   labels:
     app: portfolio-tracker
     component: nginx
