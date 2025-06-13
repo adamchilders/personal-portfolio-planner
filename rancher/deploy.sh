@@ -101,15 +101,32 @@ deploy_application() {
 
     # Apply MySQL and Redis first
     log "Deploying MySQL and Redis..."
-    kubectl apply -f mysql.yaml
+    if kubectl apply -f mysql.yaml; then
+        log_success "MySQL and Redis manifests applied"
+    else
+        log_error "Failed to apply MySQL and Redis manifests"
+        exit 1
+    fi
 
     # Wait for MySQL to be ready
     log "Waiting for MySQL to be ready..."
-    kubectl wait --for=condition=available --timeout=300s deployment/mysql -n "$NAMESPACE"
+    if kubectl wait --for=condition=available --timeout=300s deployment/mysql -n "$NAMESPACE"; then
+        log_success "MySQL is ready"
+    else
+        log_warning "MySQL deployment timeout - checking status..."
+        kubectl get pods -l component=mysql -n "$NAMESPACE"
+        kubectl logs -l component=mysql -n "$NAMESPACE" --tail=10
+    fi
 
     # Wait for Redis to be ready
     log "Waiting for Redis to be ready..."
-    kubectl wait --for=condition=available --timeout=300s deployment/redis -n "$NAMESPACE"
+    if kubectl wait --for=condition=available --timeout=300s deployment/redis -n "$NAMESPACE"; then
+        log_success "Redis is ready"
+    else
+        log_warning "Redis deployment timeout - checking status..."
+        kubectl get pods -l component=redis -n "$NAMESPACE"
+        kubectl logs -l component=redis -n "$NAMESPACE" --tail=10
+    fi
 
     # Apply ConfigMaps
     log "Applying ConfigMaps..."

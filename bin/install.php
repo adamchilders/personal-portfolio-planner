@@ -319,6 +319,9 @@ class PortfolioInstaller
         $this->log("🏁 Finalizing installation...");
 
         try {
+            // Ensure health_check table exists (fallback if migration failed)
+            $this->ensureHealthCheckTable();
+
             // Update installation status
             $this->db->table('system_settings')->updateOrInsert(
                 ['setting_key' => 'installation_status'],
@@ -346,6 +349,42 @@ class PortfolioInstaller
         } catch (Exception $e) {
             $this->log("❌ Failed to finalize installation: " . $e->getMessage(), 'error');
             return false;
+        }
+    }
+
+    private function ensureHealthCheckTable(): void
+    {
+        try {
+            // Check if health_check table exists
+            $result = $this->db->select("
+                SELECT COUNT(*) as count
+                FROM information_schema.tables
+                WHERE table_schema = ? AND table_name = 'health_check'
+            ", [$_ENV['DB_DATABASE'] ?? 'portfolio_tracker']);
+
+            if ($result[0]->count == 0) {
+                $this->log("⚠️  Health check table missing, creating it...");
+
+                // Create the health_check table directly
+                $this->db->statement("
+                    CREATE TABLE health_check (
+                        id INT PRIMARY KEY DEFAULT 1,
+                        status ENUM('pending', 'installed', 'healthy', 'unhealthy') NOT NULL DEFAULT 'pending',
+                        last_check TIMESTAMP NULL,
+                        checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+                        details JSON,
+                        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+                        INDEX idx_status (status),
+                        INDEX idx_checked_at (checked_at)
+                    )
+                ");
+
+                $this->log("✅ Health check table created");
+            }
+        } catch (Exception $e) {
+            $this->log("⚠️  Could not verify health_check table: " . $e->getMessage());
+            // Continue anyway - this is not critical for basic functionality
         }
     }
 
