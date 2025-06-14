@@ -208,12 +208,16 @@ class StockDataService
                 'currency' => $quoteData['currency'],
                 'is_active' => true
             ]);
-            
+
             // Also create/update the quote
             $this->updateStockQuote($stock, $quoteData);
-            
+
+            // Automatically fetch 1 year of historical data for new stocks
+            $this->log("New stock {$symbol} created, fetching 1 year of historical data...");
+            $this->fetchHistoricalData($symbol, 365);
+
             return $stock;
-            
+
         } catch (Exception $e) {
             error_log("Error creating stock {$symbol}: " . $e->getMessage());
             return null;
@@ -288,6 +292,27 @@ class StockDataService
             ->toArray();
     }
     
+    /**
+     * Ensure stock has sufficient historical data for portfolio calculations
+     */
+    public function ensureHistoricalData(string $symbol, int $days = 365): bool
+    {
+        // Check if we have recent historical data
+        $latestPrice = StockPrice::where('symbol', $symbol)
+            ->orderBy('price_date', 'desc')
+            ->first();
+
+        $cutoffDate = (new \DateTime())->modify("-{$days} days")->format('Y-m-d');
+
+        // If no data or data is too old, fetch fresh data
+        if (!$latestPrice || $latestPrice->price_date < $cutoffDate) {
+            $this->log("Stock {$symbol} missing sufficient historical data, fetching {$days} days...");
+            return $this->fetchHistoricalData($symbol, $days);
+        }
+
+        return true;
+    }
+
     /**
      * Validate stock symbol format
      */

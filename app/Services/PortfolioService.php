@@ -107,6 +107,9 @@ class PortfolioService
             throw new Exception('Invalid stock symbol or unable to fetch stock data');
         }
 
+        // Ensure we have historical data for portfolio value calculations
+        $this->stockDataService->ensureHistoricalData($holdingData['stock_symbol'], 365);
+
         // Check if holding already exists
         $existingHolding = $portfolio->holdings()
             ->where('stock_symbol', $holdingData['stock_symbol'])
@@ -155,6 +158,9 @@ class PortfolioService
         if (!$stock) {
             throw new Exception('Invalid stock symbol or unable to fetch stock data');
         }
+
+        // Ensure we have historical data for portfolio value calculations
+        $this->stockDataService->ensureHistoricalData($transactionData['stock_symbol'], 365);
 
         $transactionData['portfolio_id'] = $portfolio->id;
 
