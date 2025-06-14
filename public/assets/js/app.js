@@ -114,12 +114,7 @@ class PortfolioApp {
             case 'change-chart-period':
                 this.changeChartPeriod(element.dataset.period);
                 break;
-            case 'edit-trade':
-                this.showEditTradeModal(element.dataset.tradeId);
-                break;
-            case 'delete-trade':
-                this.confirmDeleteTrade(element.dataset.tradeId);
-                break;
+
             case 'view-holding-trades':
                 this.showHoldingTradesModal(element.dataset.symbol);
                 break;
@@ -128,6 +123,9 @@ class PortfolioApp {
                 break;
             case 'delete-holding':
                 this.confirmDeleteHolding(element.dataset.symbol);
+                break;
+            case 'show-edit-trade':
+                this.showEditTradeModal(element.dataset.tradeId);
                 break;
             case 'confirm-delete-trade':
                 this.deleteTrade(element.dataset.tradeId, this.getCurrentPortfolioId());
@@ -1805,8 +1803,8 @@ class PortfolioApp {
                                                 </td>
                                                 <td style="padding: var(--space-3); text-align: right;">
                                                     <div class="flex gap-2 justify-end">
-                                                        <button data-action="edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
-                                                        <button data-action="delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
+                                                        <button data-action="show-edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
+                                                        <button data-action="confirm-delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
                                                     </div>
                                                 </td>
                                             </tr>
