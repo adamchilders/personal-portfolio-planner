@@ -538,8 +538,14 @@ class PortfolioApp {
 
             this.showLoading('Loading trade details...');
 
-            // Get trade details
-            const response = await this.apiCall(`/transactions/${tradeId}`);
+            // Get current portfolio ID from context
+            const portfolioId = this.getCurrentPortfolioId();
+            if (!portfolioId) {
+                throw new Error('Portfolio ID not found');
+            }
+
+            // Get trade details using the correct endpoint
+            const response = await this.apiCall(`/portfolios/${portfolioId}/transactions/${tradeId}`);
             const trade = response.transaction;
 
             // Restore app content before showing modal

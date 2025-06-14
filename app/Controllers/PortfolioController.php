@@ -293,6 +293,126 @@ class PortfolioController
     }
 
     /**
+     * Get a specific transaction
+     */
+    public function getTransaction(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $transactionId = (int)$args['transactionId'];
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $transaction = $portfolio->transactions()->where('id', $transactionId)->first();
+
+            if (!$transaction) {
+                return $this->errorResponse($response, 'Transaction not found', 404);
+            }
+
+            $transactionData = [
+                'id' => $transaction->id,
+                'portfolio_id' => $transaction->portfolio_id,
+                'stock_symbol' => $transaction->stock_symbol,
+                'transaction_type' => $transaction->transaction_type,
+                'quantity' => $transaction->quantity,
+                'price' => $transaction->price,
+                'fees' => $transaction->fees,
+                'total_amount' => $transaction->getTotalAmount(),
+                'transaction_date' => $transaction->transaction_date->toDateString(),
+                'notes' => $transaction->notes,
+                'created_at' => $transaction->created_at->toISOString()
+            ];
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'transaction' => $transactionData
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 404);
+        }
+    }
+
+    /**
+     * Update a specific transaction
+     */
+    public function updateTransaction(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $transactionId = (int)$args['transactionId'];
+        $data = $request->getParsedBody();
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $transaction = $portfolio->transactions()->where('id', $transactionId)->first();
+
+            if (!$transaction) {
+                return $this->errorResponse($response, 'Transaction not found', 404);
+            }
+
+            // Update the transaction
+            $updatedTransaction = $this->portfolioService->updateTransaction($transaction, $data);
+
+            $responseData = [
+                'success' => true,
+                'message' => 'Transaction updated successfully',
+                'transaction' => [
+                    'id' => $updatedTransaction->id,
+                    'stock_symbol' => $updatedTransaction->stock_symbol,
+                    'transaction_type' => $updatedTransaction->transaction_type,
+                    'quantity' => $updatedTransaction->quantity,
+                    'price' => $updatedTransaction->price,
+                    'fees' => $updatedTransaction->fees,
+                    'total_amount' => $updatedTransaction->getTotalAmount(),
+                    'transaction_date' => $updatedTransaction->transaction_date->toDateString(),
+                    'updated_at' => $updatedTransaction->updated_at->toISOString()
+                ]
+            ];
+
+            $response->getBody()->write(json_encode($responseData));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * Delete a specific transaction
+     */
+    public function deleteTransaction(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $transactionId = (int)$args['transactionId'];
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $transaction = $portfolio->transactions()->where('id', $transactionId)->first();
+
+            if (!$transaction) {
+                return $this->errorResponse($response, 'Transaction not found', 404);
+            }
+
+            // Delete the transaction
+            $this->portfolioService->deleteTransaction($transaction);
+
+            $responseData = [
+                'success' => true,
+                'message' => 'Transaction deleted successfully'
+            ];
+
+            $response->getBody()->write(json_encode($responseData));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
+    /**
      * Get portfolio historical performance data
      */
     public function getHistoricalPerformance(Request $request, Response $response, array $args): Response

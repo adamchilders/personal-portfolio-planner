@@ -165,7 +165,98 @@ class PortfolioService
 
         return $transaction;
     }
-    
+
+    /**
+     * Update a transaction
+     */
+    public function updateTransaction(Transaction $transaction, array $transactionData): Transaction
+    {
+        $this->validateTransactionData($transactionData);
+
+        // Store old values for holding recalculation
+        $oldQuantity = $transaction->quantity;
+        $oldPrice = $transaction->price;
+        $oldType = $transaction->transaction_type;
+
+        // Update transaction
+        $transaction->update($transactionData);
+
+        // Recalculate holdings based on the change
+        $this->recalculateHoldingFromTransactionUpdate($transaction, $oldQuantity, $oldPrice, $oldType);
+
+        return $transaction;
+    }
+
+    /**
+     * Delete a transaction
+     */
+    public function deleteTransaction(Transaction $transaction): void
+    {
+        // Store values for holding recalculation
+        $portfolioId = $transaction->portfolio_id;
+        $stockSymbol = $transaction->stock_symbol;
+
+        // Delete the transaction
+        $transaction->delete();
+
+        // Recalculate holdings for this stock
+        $this->recalculateHoldingForStock($portfolioId, $stockSymbol);
+    }
+
+    /**
+     * Recalculate holding after transaction update
+     */
+    private function recalculateHoldingFromTransactionUpdate(Transaction $transaction, float $oldQuantity, float $oldPrice, string $oldType): void
+    {
+        $this->recalculateHoldingForStock($transaction->portfolio_id, $transaction->stock_symbol);
+    }
+
+    /**
+     * Recalculate holding for a specific stock in a portfolio
+     */
+    private function recalculateHoldingForStock(int $portfolioId, string $stockSymbol): void
+    {
+        // Get all transactions for this stock in this portfolio
+        $transactions = Transaction::where('portfolio_id', $portfolioId)
+            ->where('stock_symbol', $stockSymbol)
+            ->orderBy('transaction_date')
+            ->orderBy('created_at')
+            ->get();
+
+        // Find or create the holding
+        $holding = PortfolioHolding::firstOrCreate([
+            'portfolio_id' => $portfolioId,
+            'stock_symbol' => $stockSymbol
+        ]);
+
+        // Recalculate from scratch
+        $totalQuantity = 0;
+        $totalCostBasis = 0;
+        $lastTransactionDate = null;
+
+        foreach ($transactions as $transaction) {
+            if ($transaction->transaction_type === 'buy') {
+                $totalQuantity += $transaction->quantity;
+                $totalCostBasis += ($transaction->quantity * $transaction->price) + $transaction->fees;
+            } elseif ($transaction->transaction_type === 'sell') {
+                $totalQuantity -= $transaction->quantity;
+                // For sells, we don't add to cost basis
+            }
+            $lastTransactionDate = $transaction->transaction_date;
+        }
+
+        // Update the holding
+        if ($totalQuantity > 0) {
+            $holding->quantity = $totalQuantity;
+            $holding->avg_cost_basis = $totalCostBasis / $totalQuantity;
+            $holding->last_transaction_date = $lastTransactionDate;
+            $holding->save();
+        } else {
+            // If no shares left, delete the holding
+            $holding->delete();
+        }
+    }
+
     /**
      * Get portfolio performance summary
      */
