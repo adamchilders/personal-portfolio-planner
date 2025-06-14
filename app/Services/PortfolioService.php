@@ -279,35 +279,42 @@ class PortfolioService
 
                 // Only calculate values if we have transactions by this date
                 if ($currentDate >= $earliestDate) {
+                    // Calculate cost basis and portfolio value based on transactions up to this date
+                    $costBasisForDate = $this->calculateCostBasisUpToDate($portfolio, $dateStr);
+                    $totalCostBasis = $costBasisForDate;
+
                     foreach ($holdings as $holding) {
                         $symbol = $holding->stock_symbol;
 
-                        // Get historical price for this date
-                        $historicalPrice = $this->stockDataService->getHistoricalPrice(
-                            $symbol,
-                            $dateStr
-                        );
+                        // Get the quantity held up to this date
+                        $quantityForDate = $this->calculateQuantityUpToDate($portfolio, $symbol, $dateStr);
 
-                        if ($historicalPrice) {
-                            // Update last known price for this stock
-                            $lastKnownPrices[$symbol] = $historicalPrice;
-                            $totalValue += $holding->quantity * $historicalPrice;
-                        } else {
-                            // Use last known price if available (for weekends/holidays)
-                            if (isset($lastKnownPrices[$symbol])) {
-                                $totalValue += $holding->quantity * $lastKnownPrices[$symbol];
-                            }
-                            // If no last known price, try to get the most recent available price
-                            else {
-                                $recentPrice = $this->stockDataService->getMostRecentPrice($symbol, $dateStr);
-                                if ($recentPrice) {
-                                    $lastKnownPrices[$symbol] = $recentPrice;
-                                    $totalValue += $holding->quantity * $recentPrice;
+                        if ($quantityForDate > 0) {
+                            // Get historical price for this date
+                            $historicalPrice = $this->stockDataService->getHistoricalPrice(
+                                $symbol,
+                                $dateStr
+                            );
+
+                            if ($historicalPrice) {
+                                // Update last known price for this stock
+                                $lastKnownPrices[$symbol] = $historicalPrice;
+                                $totalValue += $quantityForDate * $historicalPrice;
+                            } else {
+                                // Use last known price if available (for weekends/holidays)
+                                if (isset($lastKnownPrices[$symbol])) {
+                                    $totalValue += $quantityForDate * $lastKnownPrices[$symbol];
+                                }
+                                // If no last known price, try to get the most recent available price
+                                else {
+                                    $recentPrice = $this->stockDataService->getMostRecentPrice($symbol, $dateStr);
+                                    if ($recentPrice) {
+                                        $lastKnownPrices[$symbol] = $recentPrice;
+                                        $totalValue += $quantityForDate * $recentPrice;
+                                    }
                                 }
                             }
                         }
-
-                        $totalCostBasis += $holding->getTotalCostBasis();
                     }
                 }
                 // If before first transaction, values remain 0
@@ -341,40 +348,25 @@ class PortfolioService
 
         foreach ($holdings as $holding) {
             $symbol = $holding->stock_symbol;
-            $historicalData = $this->stockDataService->getHistoricalPrices($symbol, $days);
 
-            if (!empty($historicalData)) {
-                // Calculate performance over the period
-                $firstPrice = $historicalData[0]['close'] ?? 0;
-                $lastPrice = end($historicalData)['close'] ?? 0;
+            // Calculate performance based on cost basis vs current value (more meaningful for investors)
+            $currentValue = $holding->getCurrentValue();
+            $costBasis = $holding->getTotalCostBasis();
+            $avgCostBasis = $holding->avg_cost_basis;
+            $currentPrice = $holding->stock?->quote?->current_price ?? 0;
 
-                $performancePercent = $firstPrice > 0 ?
-                    (($lastPrice - $firstPrice) / $firstPrice) * 100 : 0;
+            $performancePercent = $avgCostBasis > 0 ?
+                (($currentPrice - $avgCostBasis) / $avgCostBasis) * 100 : 0;
 
-                $stockPerformance[] = [
-                    'symbol' => $symbol,
-                    'name' => $holding->stock?->name ?? $symbol,
-                    'performance_percent' => round($performancePercent, 2),
-                    'first_price' => $firstPrice,
-                    'last_price' => $lastPrice,
-                    'data_points' => count($historicalData)
-                ];
-            } else {
-                // Fallback to current gain/loss if no historical data
-                $currentValue = $holding->getCurrentValue();
-                $costBasis = $holding->getTotalCostBasis();
-                $performancePercent = $costBasis > 0 ?
-                    (($currentValue - $costBasis) / $costBasis) * 100 : 0;
-
-                $stockPerformance[] = [
-                    'symbol' => $symbol,
-                    'name' => $holding->stock?->name ?? $symbol,
-                    'performance_percent' => round($performancePercent, 2),
-                    'first_price' => 0,
-                    'last_price' => 0,
-                    'data_points' => 0
-                ];
-            }
+            $stockPerformance[] = [
+                'symbol' => $symbol,
+                'name' => $holding->stock?->name ?? $symbol,
+                'performance_percent' => round($performancePercent, 2),
+                'avg_cost_basis' => $avgCostBasis,
+                'current_price' => $currentPrice,
+                'total_gain_loss' => round($currentValue - $costBasis, 2),
+                'total_gain_loss_percent' => $costBasis > 0 ? round((($currentValue - $costBasis) / $costBasis) * 100, 2) : 0
+            ];
         }
 
         return $stockPerformance;
@@ -466,5 +458,45 @@ class PortfolioService
             ->where('name', $name)
             ->where('is_active', true)
             ->exists();
+    }
+
+    /**
+     * Calculate total cost basis up to a specific date
+     */
+    private function calculateCostBasisUpToDate(Portfolio $portfolio, string $date): float
+    {
+        $transactions = $portfolio->transactions()
+            ->where('transaction_date', '<=', $date)
+            ->where('transaction_type', 'buy')
+            ->get();
+
+        $totalCostBasis = 0;
+        foreach ($transactions as $transaction) {
+            $totalCostBasis += $transaction->quantity * $transaction->price;
+        }
+
+        return $totalCostBasis;
+    }
+
+    /**
+     * Calculate quantity held for a specific symbol up to a specific date
+     */
+    private function calculateQuantityUpToDate(Portfolio $portfolio, string $symbol, string $date): float
+    {
+        $transactions = $portfolio->transactions()
+            ->where('stock_symbol', $symbol)
+            ->where('transaction_date', '<=', $date)
+            ->get();
+
+        $totalQuantity = 0;
+        foreach ($transactions as $transaction) {
+            if ($transaction->transaction_type === 'buy') {
+                $totalQuantity += $transaction->quantity;
+            } elseif ($transaction->transaction_type === 'sell') {
+                $totalQuantity -= $transaction->quantity;
+            }
+        }
+
+        return max(0, $totalQuantity); // Don't allow negative quantities
     }
 }
