@@ -11,7 +11,9 @@ use App\Helpers\DateTimeHelper;
 class Dividend extends Model
 {
     protected $table = 'dividends';
-    public $timestamps = false;
+    public $timestamps = true;
+
+    public const UPDATED_AT = null; // Only use created_at, not updated_at
     
     protected $fillable = [
         'symbol',

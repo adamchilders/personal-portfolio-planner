@@ -665,6 +665,11 @@ class StockDataService
     {
         try {
             foreach ($dividends as $dividend) {
+                // Validate required fields
+                if (!isset($dividend['symbol']) || !isset($dividend['ex_date']) || !isset($dividend['amount'])) {
+                    continue;
+                }
+
                 Dividend::updateOrCreate(
                     [
                         'symbol' => $dividend['symbol'],
@@ -682,6 +687,7 @@ class StockDataService
             return true;
         } catch (Exception $e) {
             error_log("Error storing dividend data: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
             return false;
         }
     }

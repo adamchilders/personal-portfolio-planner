@@ -56,21 +56,21 @@ class FinancialModelingPrepService
             
             $dividends = [];
             foreach ($data['historical'] as $dividendData) {
-                // FMP provides: date (payment date), label, adjDividend, dividend, recordDate, paymentDate, declarationDate
+                // FMP provides: date (ex-dividend date), label, adjDividend, dividend, recordDate, paymentDate, declarationDate
                 $dividends[] = [
                     'symbol' => $symbol,
-                    'ex_date' => $dividendData['date'] ?? null, // This is actually the payment date in FMP
-                    'payment_date' => $dividendData['paymentDate'] ?? $dividendData['date'] ?? null,
+                    'ex_date' => $dividendData['date'] ?? null, // This is the ex-dividend date in FMP
+                    'payment_date' => $dividendData['paymentDate'] ?? null,
                     'record_date' => $dividendData['recordDate'] ?? null,
                     'declaration_date' => $dividendData['declarationDate'] ?? null,
-                    'amount' => (float)($dividendData['dividend'] ?? $dividendData['adjDividend'] ?? 0),
+                    'amount' => (float)($dividendData['adjDividend'] ?? $dividendData['dividend'] ?? 0),
                     'dividend_type' => 'regular'
                 ];
             }
             
-            // Sort by payment date (newest first)
+            // Sort by ex-dividend date (newest first)
             usort($dividends, function($a, $b) {
-                return strtotime($b['payment_date'] ?? '1970-01-01') - strtotime($a['payment_date'] ?? '1970-01-01');
+                return strtotime($b['ex_date'] ?? '1970-01-01') - strtotime($a['ex_date'] ?? '1970-01-01');
             });
             
             $this->log("Found " . count($dividends) . " dividend payments for {$symbol} from FMP");

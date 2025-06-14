@@ -428,8 +428,21 @@ class StockController
         $days = min((int)($queryParams['days'] ?? 365), 1825); // Max 5 years
 
         try {
-            // Fetch fresh dividend data from Yahoo Finance
-            $dividends = $this->stockDataService->fetchDividendData($symbol, $days);
+            // Ensure the stock exists first
+            $stock = Stock::where('symbol', $symbol)->first();
+            if (!$stock) {
+                // Create the stock record if it doesn't exist
+                $stock = Stock::create([
+                    'symbol' => $symbol,
+                    'name' => $symbol, // Will be updated when we fetch company data
+                    'exchange' => 'UNKNOWN',
+                    'currency' => 'USD',
+                    'is_active' => true
+                ]);
+            }
+
+            // Fetch fresh dividend data using configured provider
+            $dividends = $this->stockDataService->fetchDividendDataWithFallback($symbol, $days);
 
             if (empty($dividends)) {
                 return $this->successResponse($response, [
