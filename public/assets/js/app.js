@@ -636,6 +636,16 @@ class PortfolioApp {
 
             if (missingDataResponse.stocks_missing_data === 0) {
                 this.showSuccess('All stocks already have sufficient historical data!');
+
+                // Return to the current portfolio view after showing success
+                setTimeout(() => {
+                    const currentPortfolioId = this.getCurrentPortfolioId();
+                    if (currentPortfolioId) {
+                        this.showPortfolioDetail(currentPortfolioId);
+                    } else {
+                        this.showDashboard();
+                    }
+                }, 2000);
                 return;
             }
 
@@ -651,7 +661,13 @@ class PortfolioApp {
             );
 
             if (!confirmed) {
-                this.showDashboard();
+                // Return to the current portfolio view if cancelled
+                const currentPortfolioId = this.getCurrentPortfolioId();
+                if (currentPortfolioId) {
+                    this.showPortfolioDetail(currentPortfolioId);
+                } else {
+                    this.showDashboard();
+                }
                 return;
             }
 
@@ -676,12 +692,27 @@ class PortfolioApp {
 
             // Refresh the current view to show updated data
             setTimeout(() => {
-                this.showDashboard();
+                const currentPortfolioId = this.getCurrentPortfolioId();
+                if (currentPortfolioId) {
+                    this.showPortfolioDetail(currentPortfolioId);
+                } else {
+                    this.showDashboard();
+                }
             }, 3000);
 
         } catch (error) {
             this.showError('Failed to backfill historical data: ' + error.message);
             console.error('Backfill error:', error);
+
+            // Return to the current view on error
+            setTimeout(() => {
+                const currentPortfolioId = this.getCurrentPortfolioId();
+                if (currentPortfolioId) {
+                    this.showPortfolioDetail(currentPortfolioId);
+                } else {
+                    this.showDashboard();
+                }
+            }, 2000);
         }
     }
 
