@@ -624,6 +624,24 @@ class StockDataService
     }
 
     /**
+     * Get the most recent available price for a symbol before or on a given date
+     */
+    public function getMostRecentPrice(string $symbol, string $beforeDate): ?float
+    {
+        try {
+            $stockPrice = StockPrice::where('symbol', $symbol)
+                ->where('price_date', '<=', $beforeDate)
+                ->orderBy('price_date', 'desc')
+                ->first();
+
+            return $stockPrice ? (float) $stockPrice->close_price : null;
+        } catch (Exception $e) {
+            error_log("Error getting most recent price for {$symbol} before {$beforeDate}: " . $e->getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Get historical prices for a symbol over a period
      */
     public function getHistoricalPrices(string $symbol, int $days = 30): array

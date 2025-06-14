@@ -264,6 +264,9 @@ class PortfolioService
         $portfolioValues = [];
         $costBasisValues = [];
 
+        // Track the last known prices for each stock to use on non-trading days
+        $lastKnownPrices = [];
+
         // Get all business days in the range from first transaction onwards
         $currentDate = clone $startDate;
         while ($currentDate <= $endDate) {
@@ -277,21 +280,34 @@ class PortfolioService
                 // Only calculate values if we have transactions by this date
                 if ($currentDate >= $earliestDate) {
                     foreach ($holdings as $holding) {
+                        $symbol = $holding->stock_symbol;
+
                         // Get historical price for this date
                         $historicalPrice = $this->stockDataService->getHistoricalPrice(
-                            $holding->stock_symbol,
+                            $symbol,
                             $dateStr
                         );
 
                         if ($historicalPrice) {
+                            // Update last known price for this stock
+                            $lastKnownPrices[$symbol] = $historicalPrice;
                             $totalValue += $holding->quantity * $historicalPrice;
-                            $totalCostBasis += $holding->getTotalCostBasis();
+                        } else {
+                            // Use last known price if available (for weekends/holidays)
+                            if (isset($lastKnownPrices[$symbol])) {
+                                $totalValue += $holding->quantity * $lastKnownPrices[$symbol];
+                            }
+                            // If no last known price, try to get the most recent available price
+                            else {
+                                $recentPrice = $this->stockDataService->getMostRecentPrice($symbol, $dateStr);
+                                if ($recentPrice) {
+                                    $lastKnownPrices[$symbol] = $recentPrice;
+                                    $totalValue += $holding->quantity * $recentPrice;
+                                }
+                            }
                         }
-                        // If no historical price available, portfolio value remains 0 for that date
-                        // but cost basis is still counted once we have the holding
-                        else {
-                            $totalCostBasis += $holding->getTotalCostBasis();
-                        }
+
+                        $totalCostBasis += $holding->getTotalCostBasis();
                     }
                 }
                 // If before first transaction, values remain 0
