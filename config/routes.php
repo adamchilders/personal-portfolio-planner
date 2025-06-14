@@ -216,7 +216,10 @@ $app->group('/api', function ($group) {
                     'DELETE /api/portfolios/{id}' => 'Delete portfolio',
                     'POST /api/portfolios/{id}/holdings' => 'Add holding to portfolio',
                     'GET /api/portfolios/{id}/transactions' => 'Get portfolio transactions',
-                    'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio'
+                    'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio',
+                    'GET /api/portfolios/{id}/transactions/{transactionId}' => 'Get specific transaction',
+                    'PUT /api/portfolios/{id}/transactions/{transactionId}' => 'Update transaction',
+                    'DELETE /api/portfolios/{id}/transactions/{transactionId}' => 'Delete transaction'
                 ],
                 'Stocks' => [
                     'GET /api/stocks/search?q={query}' => 'Search for stocks',
