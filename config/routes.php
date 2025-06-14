@@ -256,6 +256,14 @@ $app->group('/admin', function ($group) {
     $group->put('/api-keys/{id}', \App\Controllers\Admin\ApiKeyController::class . ':update');
     $group->post('/api-keys/{id}/test', \App\Controllers\Admin\ApiKeyController::class . ':test');
 
+    // Data provider configuration
+    $group->get('/data-providers', \App\Controllers\Admin\ApiKeyController::class . ':getDataProviderConfig');
+    $group->put('/data-providers/{id}', \App\Controllers\Admin\ApiKeyController::class . ':updateDataProviderConfig');
+
+    // User management
+    $group->get('/users', \App\Controllers\Admin\ApiKeyController::class . ':getUsers');
+    $group->put('/users/{id}/role', \App\Controllers\Admin\ApiKeyController::class . ':updateUserRole');
+
     // Admin dashboard
     $group->get('', function (Request $request, Response $response) {
         $data = [

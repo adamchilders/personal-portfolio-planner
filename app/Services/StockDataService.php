@@ -8,6 +8,8 @@ use App\Models\Stock;
 use App\Models\StockQuote;
 use App\Models\StockPrice;
 use App\Models\Dividend;
+use App\Models\PortfolioHolding;
+use App\Models\DataProviderConfig;
 use App\Services\ConfigService;
 use App\Helpers\DateTimeHelper;
 use App\Services\FinancialModelingPrepService;
@@ -437,9 +439,65 @@ class StockDataService
     }
 
     /**
-     * Fetch dividend data with FMP fallback for complete data
+     * Fetch dividend data with configurable provider selection
      */
     public function fetchDividendDataWithFallback(string $symbol, int $days = 365): array
+    {
+        // Get configured providers for dividend data
+        $config = DataProviderConfig::getConfig(DataProviderConfig::DATA_TYPE_DIVIDEND_DATA);
+
+        if (!$config) {
+            // Fallback to old logic if no configuration
+            return $this->fetchDividendDataLegacy($symbol, $days);
+        }
+
+        $primaryProvider = $config['primary_provider'];
+        $fallbackProvider = $config['fallback_provider'];
+
+        // Try primary provider first
+        $dividends = $this->fetchDividendDataFromProvider($symbol, $days, $primaryProvider);
+
+        // If primary failed and we have a fallback, try it
+        if (empty($dividends) && $fallbackProvider) {
+            $this->log("Primary provider {$primaryProvider} failed for {$symbol}, trying fallback {$fallbackProvider}");
+            $dividends = $this->fetchDividendDataFromProvider($symbol, $days, $fallbackProvider);
+        }
+
+        return $dividends;
+    }
+
+    /**
+     * Fetch dividend data from a specific provider
+     */
+    private function fetchDividendDataFromProvider(string $symbol, int $days, string $provider): array
+    {
+        try {
+            switch ($provider) {
+                case DataProviderConfig::PROVIDER_YAHOO_FINANCE:
+                    return $this->fetchDividendData($symbol, $days);
+
+                case DataProviderConfig::PROVIDER_FINANCIAL_MODELING_PREP:
+                    if ($this->fmpService->isAvailable()) {
+                        return $this->fmpService->fetchDividendData($symbol);
+                    } else {
+                        $this->log("FMP service not available for {$symbol}");
+                        return [];
+                    }
+
+                default:
+                    $this->log("Unknown provider {$provider} for {$symbol}");
+                    return [];
+            }
+        } catch (Exception $e) {
+            $this->log("Error fetching dividend data from {$provider} for {$symbol}: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Legacy dividend data fetching with FMP fallback
+     */
+    private function fetchDividendDataLegacy(string $symbol, int $days = 365): array
     {
         // First try Yahoo Finance (free)
         $yahooDividends = $this->fetchDividendData($symbol, $days);
