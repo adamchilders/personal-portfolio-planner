@@ -330,7 +330,7 @@
 
                         if (response.ok) {
                             const data = await response.json();
-                            if (data.success && data.user.role === 'admin') {
+                            if (data.user && data.user.role === 'admin') {
                                 this.showAlert(`Welcome, ${data.user.username}! You have admin access.`, 'success');
                                 return;
                             } else {
