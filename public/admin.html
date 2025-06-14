@@ -623,8 +623,65 @@
                 }
 
                 try {
-                    // For now, just show a success message since we need to implement the backend
-                    this.showAlert('FMP API key configuration saved! (Backend implementation pending)', 'success');
+                    // Find the FMP API key record ID
+                    const response = await fetch('/admin/api-keys', {
+                        headers: {
+                            'Authorization': 'Bearer ' + this.authToken
+                        }
+                    });
+                    const data = await response.json();
+
+                    if (!data.success) {
+                        this.showAlert('Failed to load API keys: ' + data.message, 'error');
+                        return;
+                    }
+
+                    const fmpKey = data.api_keys.find(key => key.provider === 'financial_modeling_prep');
+                    if (!fmpKey) {
+                        this.showAlert('FMP API key record not found', 'error');
+                        return;
+                    }
+
+                    // Update the FMP API key
+                    const updateResponse = await fetch(`/admin/api-keys/${fmpKey.id}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + this.authToken
+                        },
+                        body: JSON.stringify({
+                            api_key: apiKey.trim(),
+                            is_active: true,
+                            notes: notes.trim() || 'Financial Modeling Prep API key'
+                        })
+                    });
+
+                    const updateResult = await updateResponse.json();
+
+                    if (updateResult.success) {
+                        this.showAlert('FMP API key saved successfully!', 'success');
+
+                        // Test the API key
+                        const testResponse = await fetch(`/admin/api-keys/${fmpKey.id}/test`, {
+                            method: 'POST',
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+
+                        const testResult = await testResponse.json();
+
+                        if (testResult.success) {
+                            this.showAlert('✅ FMP API key is working correctly!', 'success');
+                        } else {
+                            this.showAlert('⚠️ API key saved but test failed: ' + testResult.error, 'error');
+                        }
+
+                        // Reload the API keys to show updated status
+                        await this.loadApiKeys();
+                    } else {
+                        this.showAlert('Failed to save API key: ' + updateResult.message, 'error');
+                    }
                 } catch (error) {
                     this.showAlert('Error saving configuration: ' + error.message, 'error');
                 }
