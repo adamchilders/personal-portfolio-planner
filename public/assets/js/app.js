@@ -412,9 +412,16 @@ class PortfolioApp {
 
     async showTradeHistoryModal(portfolioId) {
         try {
+            // Store current app content before showing loading
+            const currentAppContent = document.getElementById('app').innerHTML;
+
             this.showLoading('Loading trade history...');
 
             const response = await this.apiCall(`/portfolios/${portfolioId}/transactions`);
+
+            // Restore app content before showing modal
+            document.getElementById('app').innerHTML = currentAppContent;
+
             this.showModal(this.getTradeHistoryModalHTML(response.data || [], portfolioId));
         } catch (error) {
             this.showError('Failed to load trade history');
@@ -527,11 +534,17 @@ class PortfolioApp {
 
     async showEditTradeModal(tradeId) {
         try {
+            // Store current app content before showing loading
+            const currentAppContent = document.getElementById('app').innerHTML;
+
             this.showLoading('Loading trade details...');
 
             // Get trade details
             const response = await this.apiCall(`/transactions/${tradeId}`);
             const trade = response.transaction;
+
+            // Restore app content before showing modal
+            document.getElementById('app').innerHTML = currentAppContent;
 
             this.showModal(this.getEditTradeModalHTML(trade));
         } catch (error) {
@@ -546,11 +559,17 @@ class PortfolioApp {
 
     async showHoldingTradesModal(symbol) {
         try {
+            // Store current app content before showing loading
+            const currentAppContent = document.getElementById('app').innerHTML;
+
             this.showLoading('Loading trades for ' + symbol + '...');
 
             // Get current portfolio ID from URL or context
             const portfolioId = this.getCurrentPortfolioId();
             const response = await this.apiCall(`/portfolios/${portfolioId}/transactions?symbol=${symbol}`);
+
+            // Restore app content before showing modal
+            document.getElementById('app').innerHTML = currentAppContent;
 
             this.showModal(this.getHoldingTradesModalHTML(response.data || [], symbol, portfolioId));
         } catch (error) {
@@ -583,9 +602,16 @@ class PortfolioApp {
 
     async showStockDetailModal(symbol) {
         try {
+            // Store current app content before showing loading
+            const currentAppContent = document.getElementById('app').innerHTML;
+
             this.showLoading('Loading stock information...');
 
             const stockData = await this.apiCall(`/stocks/${symbol}`);
+
+            // Restore app content before showing modal
+            document.getElementById('app').innerHTML = currentAppContent;
+
             this.showModal(this.getStockDetailModalHTML(stockData));
         } catch (error) {
             this.showError('Failed to load stock information');
