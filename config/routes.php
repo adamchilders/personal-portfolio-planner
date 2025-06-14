@@ -125,6 +125,8 @@ $app->group('/api/stocks', function ($group) {
     $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
     $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
     $group->post('/quotes', [StockController::class, 'multipleQuotes']);
+    $group->get('/missing-historical-data', [StockController::class, 'getMissingHistoricalData']);
+    $group->post('/backfill-historical-data', [StockController::class, 'backfillHistoricalData']);
 })->add(AuthMiddleware::class);
 
 // Frontend routes - serve the main application
@@ -227,7 +229,9 @@ $app->group('/api', function ($group) {
                     'GET /api/stocks/{symbol}/history' => 'Get historical price data',
                     'GET /api/stocks/{symbol}' => 'Get stock information',
                     'POST /api/stocks/{symbol}/update-quote' => 'Update stock quote',
-                    'POST /api/stocks/quotes' => 'Get multiple stock quotes'
+                    'POST /api/stocks/quotes' => 'Get multiple stock quotes',
+                    'GET /api/stocks/missing-historical-data' => 'Get stocks missing historical data',
+                    'POST /api/stocks/backfill-historical-data' => 'Backfill historical data for stocks'
                 ]
             ]
         ];

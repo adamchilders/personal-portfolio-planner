@@ -314,6 +314,82 @@ class StockDataService
     }
 
     /**
+     * Get all stocks that are missing historical data
+     */
+    public function getStocksMissingHistoricalData(): array
+    {
+        // Get all active stocks
+        $allStocks = Stock::where('is_active', true)->pluck('symbol')->toArray();
+
+        $stocksMissingData = [];
+        $cutoffDate = (new \DateTime())->modify('-365 days')->format('Y-m-d');
+
+        foreach ($allStocks as $symbol) {
+            $latestPrice = StockPrice::where('symbol', $symbol)
+                ->orderBy('price_date', 'desc')
+                ->first();
+
+            // If no data or data is too old, mark as missing
+            if (!$latestPrice || $latestPrice->price_date < $cutoffDate) {
+                $stocksMissingData[] = [
+                    'symbol' => $symbol,
+                    'latest_date' => $latestPrice ? $latestPrice->price_date : null,
+                    'days_missing' => $latestPrice ?
+                        (new \DateTime())->diff(new \DateTime($latestPrice->price_date))->days :
+                        365
+                ];
+            }
+        }
+
+        return $stocksMissingData;
+    }
+
+    /**
+     * Backfill historical data for multiple stocks
+     */
+    public function backfillHistoricalData(array $symbols = null, int $days = 365): array
+    {
+        // If no symbols provided, get all stocks missing data
+        if ($symbols === null) {
+            $missingData = $this->getStocksMissingHistoricalData();
+            $symbols = array_column($missingData, 'symbol');
+        }
+
+        $results = [];
+        $totalSymbols = count($symbols);
+
+        $this->log("Starting historical data backfill for {$totalSymbols} stocks...");
+
+        foreach ($symbols as $index => $symbol) {
+            $this->log("Processing {$symbol} (" . ($index + 1) . "/{$totalSymbols})...");
+
+            try {
+                $success = $this->fetchHistoricalData($symbol, $days);
+                $results[$symbol] = [
+                    'success' => $success,
+                    'message' => $success ? 'Historical data fetched successfully' : 'Failed to fetch data'
+                ];
+
+                // Rate limiting between stocks
+                if ($index < $totalSymbols - 1) {
+                    usleep(1000000); // 1 second delay between stocks
+                }
+
+            } catch (Exception $e) {
+                $results[$symbol] = [
+                    'success' => false,
+                    'message' => 'Error: ' . $e->getMessage()
+                ];
+            }
+        }
+
+        $successCount = count(array_filter($results, fn($r) => $r['success']));
+        $this->log("Backfill completed: {$successCount}/{$totalSymbols} stocks processed successfully");
+
+        return $results;
+    }
+
+    /**
      * Validate stock symbol format
      */
     public function isValidSymbol(string $symbol): bool

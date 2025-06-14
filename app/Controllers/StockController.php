@@ -294,7 +294,95 @@ class StockController
             return $this->errorResponse($response, 'Failed to fetch quotes: ' . $e->getMessage(), 500);
         }
     }
-    
+
+    /**
+     * Backfill historical data for stocks missing data
+     */
+    public function backfillHistoricalData(Request $request, Response $response): Response
+    {
+        try {
+            // Get query parameters
+            $params = $request->getQueryParams();
+            $symbols = isset($params['symbols']) ? explode(',', $params['symbols']) : null;
+            $days = isset($params['days']) ? (int)$params['days'] : 365;
+
+            // Get stocks missing data if no specific symbols provided
+            if ($symbols === null) {
+                $missingData = $this->stockDataService->getStocksMissingHistoricalData();
+
+                if (empty($missingData)) {
+                    return $this->successResponse($response, [
+                        'message' => 'All stocks already have sufficient historical data',
+                        'stocks_processed' => 0,
+                        'results' => []
+                    ]);
+                }
+
+                $symbols = array_column($missingData, 'symbol');
+            }
+
+            // Clean up symbols (remove whitespace, convert to uppercase)
+            $symbols = array_map('trim', $symbols);
+            $symbols = array_map('strtoupper', $symbols);
+            $symbols = array_filter($symbols); // Remove empty values
+
+            if (empty($symbols)) {
+                return $this->errorResponse($response, 'No valid symbols provided', 400);
+            }
+
+            // Perform the backfill
+            $results = $this->stockDataService->backfillHistoricalData($symbols, $days);
+
+            $successCount = count(array_filter($results, fn($r) => $r['success']));
+            $totalCount = count($results);
+
+            $responseData = [
+                'message' => "Historical data backfill completed: {$successCount}/{$totalCount} stocks processed successfully",
+                'stocks_processed' => $totalCount,
+                'successful' => $successCount,
+                'failed' => $totalCount - $successCount,
+                'results' => $results
+            ];
+
+            return $this->successResponse($response, $responseData);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, 'Failed to backfill historical data: ' . $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get stocks missing historical data
+     */
+    public function getMissingHistoricalData(Request $request, Response $response): Response
+    {
+        try {
+            $missingData = $this->stockDataService->getStocksMissingHistoricalData();
+
+            $responseData = [
+                'message' => count($missingData) > 0 ?
+                    'Found ' . count($missingData) . ' stocks missing historical data' :
+                    'All stocks have sufficient historical data',
+                'stocks_missing_data' => count($missingData),
+                'stocks' => $missingData
+            ];
+
+            return $this->successResponse($response, $responseData);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, 'Failed to check missing historical data: ' . $e->getMessage(), 500);
+        }
+    }
+
+    private function successResponse(Response $response, array $data, int $status = 200): Response
+    {
+        $data['success'] = true;
+        $data['timestamp'] = date('c');
+
+        $response->getBody()->write(json_encode($data));
+        return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [
