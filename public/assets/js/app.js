@@ -420,14 +420,150 @@ class PortfolioApp {
                 this.apiCall(`/portfolios/${portfolioId}/transactions`)
             ]);
 
+            // Store original transactions for filtering
+            this.originalTransactions = transactionsResponse.data || [];
+            this.currentPortfolioData = portfolioResponse;
+            this.currentPortfolioId = portfolioId;
+
             document.getElementById('app').innerHTML = this.getTradeHistoryPageHTML(
                 portfolioResponse,
-                transactionsResponse.data || [],
+                this.originalTransactions,
                 portfolioId
             );
+
+            // Initialize filters after DOM is ready
+            setTimeout(() => {
+                this.initializeTradeHistoryFilters();
+            }, 100);
         } catch (error) {
             this.showError('Failed to load trade history');
             console.error('Trade history error:', error);
+        }
+    }
+
+    initializeTradeHistoryFilters() {
+        // Add event listeners to all filter inputs
+        const symbolFilter = document.getElementById('symbol-filter');
+        const typeFilter = document.getElementById('type-filter');
+        const dateFilter = document.getElementById('date-filter');
+        const sortFilter = document.getElementById('sort-filter');
+
+        if (symbolFilter) {
+            symbolFilter.addEventListener('input', () => this.applyTradeFilters());
+        }
+        if (typeFilter) {
+            typeFilter.addEventListener('change', () => this.applyTradeFilters());
+        }
+        if (dateFilter) {
+            dateFilter.addEventListener('change', () => this.applyTradeFilters());
+        }
+        if (sortFilter) {
+            sortFilter.addEventListener('change', () => this.applyTradeFilters());
+        }
+    }
+
+    applyTradeFilters() {
+        if (!this.originalTransactions) return;
+
+        let filteredTransactions = [...this.originalTransactions];
+
+        // Apply symbol filter
+        const symbolFilter = document.getElementById('symbol-filter');
+        if (symbolFilter && symbolFilter.value.trim()) {
+            const searchTerm = symbolFilter.value.trim().toLowerCase();
+            filteredTransactions = filteredTransactions.filter(trade =>
+                trade.stock_symbol.toLowerCase().includes(searchTerm)
+            );
+        }
+
+        // Apply type filter
+        const typeFilter = document.getElementById('type-filter');
+        if (typeFilter && typeFilter.value) {
+            filteredTransactions = filteredTransactions.filter(trade =>
+                trade.transaction_type === typeFilter.value
+            );
+        }
+
+        // Apply date filter
+        const dateFilter = document.getElementById('date-filter');
+        if (dateFilter && dateFilter.value) {
+            const days = parseInt(dateFilter.value);
+            const cutoffDate = new Date();
+            cutoffDate.setDate(cutoffDate.getDate() - days);
+
+            filteredTransactions = filteredTransactions.filter(trade => {
+                const tradeDate = new Date(trade.transaction_date);
+                return tradeDate >= cutoffDate;
+            });
+        }
+
+        // Apply sorting
+        const sortFilter = document.getElementById('sort-filter');
+        if (sortFilter && sortFilter.value) {
+            const sortBy = sortFilter.value;
+            filteredTransactions.sort((a, b) => {
+                switch (sortBy) {
+                    case 'date-desc':
+                        return new Date(b.transaction_date) - new Date(a.transaction_date);
+                    case 'date-asc':
+                        return new Date(a.transaction_date) - new Date(b.transaction_date);
+                    case 'symbol-asc':
+                        return a.stock_symbol.localeCompare(b.stock_symbol);
+                    case 'amount-desc':
+                        return (b.quantity * b.price) - (a.quantity * a.price);
+                    case 'amount-asc':
+                        return (a.quantity * a.price) - (b.quantity * b.price);
+                    default:
+                        return 0;
+                }
+            });
+        }
+
+        // Update the table and stats
+        this.updateTradeHistoryDisplay(filteredTransactions);
+    }
+
+    updateTradeHistoryDisplay(transactions) {
+        // Update summary stats
+        this.updateTradeHistoryStats(transactions);
+
+        // Update the table
+        const tableBody = document.querySelector('#trades-table tbody');
+        const showingCount = document.querySelector('.text-muted');
+
+        if (tableBody) {
+            tableBody.innerHTML = this.renderTradeRows(transactions);
+        }
+
+        if (showingCount) {
+            showingCount.textContent = `Showing ${transactions.length} transactions`;
+        }
+    }
+
+    updateTradeHistoryStats(transactions) {
+        // Update total trades
+        const totalTradesElement = document.querySelector('.grid.grid-cols-4.gap-6 .card:nth-child(1) div:first-child');
+        if (totalTradesElement) {
+            totalTradesElement.textContent = transactions.length;
+        }
+
+        // Update buy orders
+        const buyOrdersElement = document.querySelector('.grid.grid-cols-4.gap-6 .card:nth-child(2) div:first-child');
+        if (buyOrdersElement) {
+            buyOrdersElement.textContent = transactions.filter(t => t.transaction_type === 'buy').length;
+        }
+
+        // Update sell orders
+        const sellOrdersElement = document.querySelector('.grid.grid-cols-4.gap-6 .card:nth-child(3) div:first-child');
+        if (sellOrdersElement) {
+            sellOrdersElement.textContent = transactions.filter(t => t.transaction_type === 'sell').length;
+        }
+
+        // Update total volume
+        const totalVolumeElement = document.querySelector('.grid.grid-cols-4.gap-6 .card:nth-child(4) div:first-child');
+        if (totalVolumeElement) {
+            const totalVolume = this.calculateTotalTradeValue(transactions);
+            totalVolumeElement.textContent = `$${totalVolume.toLocaleString()}`;
         }
     }
 
