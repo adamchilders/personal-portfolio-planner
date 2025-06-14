@@ -117,17 +117,7 @@ $app->group('/api/portfolios', function ($group) {
     $group->get('/{id:[0-9]+}/stocks/performance', [PortfolioController::class, 'getStockPerformance']);
 })->add(AuthMiddleware::class);
 
-// Stock routes (protected)
-$app->group('/api/stocks', function ($group) {
-    $group->get('/search', [StockController::class, 'search']);
-    $group->get('/{symbol:[A-Z0-9.-]+}/quote', [StockController::class, 'quote']);
-    $group->get('/{symbol:[A-Z0-9.-]+}/history', [StockController::class, 'history']);
-    $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
-    $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
-    $group->post('/quotes', [StockController::class, 'multipleQuotes']);
-    $group->get('/missing-historical-data', [StockController::class, 'getMissingHistoricalData']);
-    $group->post('/backfill-historical-data', [StockController::class, 'backfillHistoricalData']);
-})->add(AuthMiddleware::class);
+
 
 // Frontend routes - serve the main application
 $app->get('/', function (Request $request, Response $response) {
@@ -240,7 +230,19 @@ $app->group('/api', function ($group) {
         return $response->withHeader('Content-Type', 'application/json');
     });
 
-});
+})->add(AuthMiddleware::class);
+
+// Stock routes (protected) - inside API group
+$app->group('/api/stocks', function ($group) {
+    $group->get('/search', [StockController::class, 'search']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/quote', [StockController::class, 'quote']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/history', [StockController::class, 'history']);
+    $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
+    $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
+    $group->post('/quotes', [StockController::class, 'multipleQuotes']);
+    $group->get('/missing-historical-data', [StockController::class, 'getMissingHistoricalData']);
+    $group->post('/backfill-historical-data', [StockController::class, 'backfillHistoricalData']);
+})->add(AuthMiddleware::class);
 
 // Admin routes group (placeholder)
 $app->group('/admin', function ($group) {
