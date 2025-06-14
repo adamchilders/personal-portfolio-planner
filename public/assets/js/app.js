@@ -2817,17 +2817,34 @@ class PortfolioApp {
                                 <h5 style="margin-bottom: var(--space-3);">Recent Dividends (${stockData.dividend_count} payments)</h5>
                                 <div style="max-height: 150px; overflow-y: auto;">
                                     ${stockData.dividends.slice(0, 5).map(dividend => `
-                                        <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--gray-100);">
-                                            <div>
-                                                <div style="font-weight: 500;">${new Date(dividend.ex_date).toLocaleDateString()}</div>
-                                                <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Ex-Date</div>
+                                        <div class="py-3" style="border-bottom: 1px solid var(--gray-100);">
+                                            <div class="flex justify-between items-start mb-2">
+                                                <div style="font-weight: 600; color: var(--success-green); font-size: var(--font-size-lg);">
+                                                    $${this.formatNumber(dividend.amount)}
+                                                </div>
+                                                <div style="font-size: var(--font-size-xs); color: var(--gray-500); text-transform: uppercase;">
+                                                    ${dividend.dividend_type || 'Regular'}
+                                                </div>
                                             </div>
-                                            <div class="text-right">
-                                                <div style="font-weight: 600; color: var(--success-green);">$${this.formatNumber(dividend.amount)}</div>
-                                                <div style="font-size: var(--font-size-xs); color: var(--gray-500);">${dividend.dividend_type || 'Regular'}</div>
+                                            <div class="grid grid-cols-2 gap-4" style="font-size: var(--font-size-sm);">
+                                                <div>
+                                                    <div style="font-weight: 500; color: var(--gray-700);">${new Date(dividend.ex_date).toLocaleDateString()}</div>
+                                                    <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Ex-Date</div>
+                                                </div>
+                                                ${dividend.payment_date ? `
+                                                    <div>
+                                                        <div style="font-weight: 500; color: var(--gray-700);">${new Date(dividend.payment_date).toLocaleDateString()}</div>
+                                                        <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Payment Date*</div>
+                                                    </div>
+                                                ` : ''}
                                             </div>
                                         </div>
                                     `).join('')}
+                                </div>
+                                <div style="margin-top: var(--space-2); padding: var(--space-2); background: var(--gray-50); border-radius: var(--radius-sm);">
+                                    <div style="font-size: var(--font-size-xs); color: var(--gray-600);">
+                                        * Payment dates are estimated based on typical patterns (3 weeks after ex-date)
+                                    </div>
                                 </div>
                             </div>
                         ` : ''}

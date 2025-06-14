@@ -427,7 +427,7 @@ All API responses follow this format:
       "symbol": "AAPL",
       "ex_date": "2024-11-08",
       "amount": 0.24,
-      "payment_date": "2024-11-14",
+      "payment_date": "2024-11-29",
       "record_date": "2024-11-11",
       "dividend_type": "regular"
     },
@@ -435,13 +435,17 @@ All API responses follow this format:
       "symbol": "AAPL",
       "ex_date": "2024-08-09",
       "amount": 0.24,
-      "payment_date": "2024-08-15",
+      "payment_date": "2024-08-30",
       "record_date": "2024-08-12",
       "dividend_type": "regular"
     }
   ]
 }
 ```
+
+**Note**: Payment dates and record dates are estimated based on typical patterns:
+- Record date: 1 business day after ex-date
+- Payment date: 3 weeks after ex-date (adjusted for weekends)
 
 ### POST /api/stocks/{symbol}/dividends/update
 **Purpose**: Fetch and update dividend data from Yahoo Finance
@@ -461,11 +465,15 @@ All API responses follow this format:
       "symbol": "AAPL",
       "ex_date": "2024-11-08",
       "amount": 0.24,
+      "record_date": "2024-11-11",
+      "payment_date": "2024-11-29",
       "timestamp": 1731024000
     }
   ]
 }
 ```
+
+**Note**: This endpoint fetches ex-dates and amounts from Yahoo Finance, then calculates estimated payment and record dates.
 
 ### POST /api/stocks/{symbol}/update-quote
 **Purpose**: Force update stock quote from external API
