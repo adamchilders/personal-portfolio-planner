@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Portfolio Tracker - Admin</title>
+    <style>
+        :root {
+            --primary-blue: #2563eb;
+            --success-green: #059669;
+            --warning-orange: #d97706;
+            --error-red: #dc2626;
+            --gray-50: #f9fafb;
+            --gray-100: #f3f4f6;
+            --gray-200: #e5e7eb;
+            --gray-300: #d1d5db;
+            --gray-400: #9ca3af;
+            --gray-500: #6b7280;
+            --gray-600: #4b5563;
+            --gray-700: #374151;
+            --gray-800: #1f2937;
+            --gray-900: #111827;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: var(--gray-50);
+            color: var(--gray-900);
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+
+        .header {
+            background: white;
+            padding: 1.5rem 2rem;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            margin-bottom: 2rem;
+        }
+
+        .header h1 {
+            color: var(--primary-blue);
+            font-size: 1.875rem;
+            font-weight: 700;
+        }
+
+        .card {
+            background: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card h2 {
+            color: var(--gray-800);
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+        }
+
+        .form-group {
+            margin-bottom: 1rem;
+        }
+
+        .form-group label {
+            display: block;
+            font-weight: 500;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+
+        .form-group input, .form-group textarea, .form-group select {
+            width: 100%;
+            padding: 0.75rem;
+            border: 1px solid var(--gray-300);
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+        }
+
+        .form-group input:focus, .form-group textarea:focus, .form-group select:focus {
+            outline: none;
+            border-color: var(--primary-blue);
+            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+        }
+
+        .btn {
+            padding: 0.75rem 1.5rem;
+            border: none;
+            border-radius: 0.375rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            display: inline-block;
+            text-align: center;
+        }
+
+        .btn-primary {
+            background: var(--primary-blue);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1d4ed8;
+        }
+
+        .btn-success {
+            background: var(--success-green);
+            color: white;
+        }
+
+        .btn-success:hover {
+            background: #047857;
+        }
+
+        .btn-warning {
+            background: var(--warning-orange);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            background: #b45309;
+        }
+
+        .status-badge {
+            padding: 0.25rem 0.75rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        .status-active {
+            background: #dcfce7;
+            color: var(--success-green);
+        }
+
+        .status-inactive {
+            background: #fef2f2;
+            color: var(--error-red);
+        }
+
+        .grid {
+            display: grid;
+            gap: 1.5rem;
+        }
+
+        .grid-2 {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .alert {
+            padding: 1rem;
+            border-radius: 0.375rem;
+            margin-bottom: 1rem;
+        }
+
+        .alert-success {
+            background: #dcfce7;
+            color: var(--success-green);
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background: #fef2f2;
+            color: var(--error-red);
+            border: 1px solid #fecaca;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading {
+            opacity: 0.6;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Portfolio Tracker - Admin Interface</h1>
+            <p>Manage API keys and data providers</p>
+        </div>
+
+        <div id="alerts"></div>
+
+        <div class="grid grid-2">
+            <div class="card">
+                <h2>API Key Management</h2>
+                <div id="api-keys-list">
+                    <p>Loading API keys...</p>
+                </div>
+            </div>
+
+            <div class="card">
+                <h2>Financial Modeling Prep Configuration</h2>
+                <form id="fmp-config-form">
+                    <div class="form-group">
+                        <label for="fmp-api-key">API Key</label>
+                        <input type="password" id="fmp-api-key" placeholder="Enter your FMP API key">
+                    </div>
+                    <div class="form-group">
+                        <label for="fmp-notes">Notes</label>
+                        <textarea id="fmp-notes" rows="3" placeholder="Optional notes about this API key"></textarea>
+                    </div>
+                    <button type="submit" class="btn btn-primary">Save & Test API Key</button>
+                </form>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Test Dividend Data Integration</h2>
+            <p>Test the FMP integration by fetching dividend data for a stock:</p>
+            <div style="display: flex; gap: 1rem; align-items: end; margin-top: 1rem;">
+                <div class="form-group" style="flex: 1; margin-bottom: 0;">
+                    <label for="test-symbol">Stock Symbol</label>
+                    <input type="text" id="test-symbol" placeholder="e.g., AAPL" value="AAPL">
+                </div>
+                <button id="test-dividend-btn" class="btn btn-success">Test Dividend Fetch</button>
+            </div>
+            <div id="test-results" class="hidden" style="margin-top: 1rem; padding: 1rem; background: var(--gray-50); border-radius: 0.375rem;">
+                <h3>Test Results:</h3>
+                <pre id="test-output" style="white-space: pre-wrap; font-size: 0.875rem;"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple admin interface for API key management
+        class AdminInterface {
+            constructor() {
+                this.init();
+            }
+
+            async init() {
+                await this.loadApiKeys();
+                this.setupEventListeners();
+            }
+
+            async loadApiKeys() {
+                try {
+                    const response = await fetch('/admin/api-keys');
+                    const data = await response.json();
+                    
+                    if (data.success) {
+                        this.renderApiKeys(data.api_keys);
+                    } else {
+                        this.showAlert('Failed to load API keys: ' + data.message, 'error');
+                    }
+                } catch (error) {
+                    this.showAlert('Error loading API keys: ' + error.message, 'error');
+                }
+            }
+
+            renderApiKeys(apiKeys) {
+                const container = document.getElementById('api-keys-list');
+                
+                if (apiKeys.length === 0) {
+                    container.innerHTML = '<p>No API keys configured.</p>';
+                    return;
+                }
+
+                const html = apiKeys.map(key => `
+                    <div style="border: 1px solid var(--gray-200); border-radius: 0.375rem; padding: 1rem; margin-bottom: 1rem;">
+                        <div style="display: flex; justify-content: between; align-items: center; margin-bottom: 0.5rem;">
+                            <strong>${key.provider}</strong>
+                            <span class="status-badge ${key.is_active ? 'status-active' : 'status-inactive'}">
+                                ${key.is_active ? 'Active' : 'Inactive'}
+                            </span>
+                        </div>
+                        <div style="font-size: 0.875rem; color: var(--gray-600);">
+                            <p>Daily Limit: ${key.rate_limit_per_day || 'Unlimited'}</p>
+                            <p>Usage Today: ${key.usage_count_today || 0} (${key.usage_percentage?.toFixed(1) || 0}%)</p>
+                            <p>Last Used: ${key.last_used ? new Date(key.last_used).toLocaleString() : 'Never'}</p>
+                        </div>
+                    </div>
+                `).join('');
+
+                container.innerHTML = html;
+            }
+
+            setupEventListeners() {
+                // FMP configuration form
+                document.getElementById('fmp-config-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.saveFmpConfig();
+                });
+
+                // Test dividend fetch
+                document.getElementById('test-dividend-btn').addEventListener('click', async () => {
+                    await this.testDividendFetch();
+                });
+            }
+
+            async saveFmpConfig() {
+                const apiKey = document.getElementById('fmp-api-key').value;
+                const notes = document.getElementById('fmp-notes').value;
+
+                if (!apiKey.trim()) {
+                    this.showAlert('Please enter an API key', 'error');
+                    return;
+                }
+
+                try {
+                    // For now, just show a success message since we need to implement the backend
+                    this.showAlert('FMP API key configuration saved! (Backend implementation pending)', 'success');
+                } catch (error) {
+                    this.showAlert('Error saving configuration: ' + error.message, 'error');
+                }
+            }
+
+            async testDividendFetch() {
+                const symbol = document.getElementById('test-symbol').value.toUpperCase();
+                
+                if (!symbol.trim()) {
+                    this.showAlert('Please enter a stock symbol', 'error');
+                    return;
+                }
+
+                const btn = document.getElementById('test-dividend-btn');
+                const results = document.getElementById('test-results');
+                const output = document.getElementById('test-output');
+
+                btn.textContent = 'Testing...';
+                btn.disabled = true;
+                results.classList.remove('hidden');
+                output.textContent = 'Fetching dividend data...';
+
+                try {
+                    // Test the dividend endpoint
+                    const response = await fetch(`/api/stocks/${symbol}/dividends/update`, {
+                        method: 'POST'
+                    });
+                    const data = await response.json();
+                    
+                    output.textContent = JSON.stringify(data, null, 2);
+                    
+                    if (data.success) {
+                        this.showAlert(`Successfully fetched ${data.count || 0} dividend records for ${symbol}`, 'success');
+                    } else {
+                        this.showAlert('Failed to fetch dividend data: ' + data.message, 'error');
+                    }
+                } catch (error) {
+                    output.textContent = 'Error: ' + error.message;
+                    this.showAlert('Error testing dividend fetch: ' + error.message, 'error');
+                } finally {
+                    btn.textContent = 'Test Dividend Fetch';
+                    btn.disabled = false;
+                }
+            }
+
+            showAlert(message, type) {
+                const alerts = document.getElementById('alerts');
+                const alert = document.createElement('div');
+                alert.className = `alert alert-${type}`;
+                alert.textContent = message;
+                
+                alerts.appendChild(alert);
+                
+                setTimeout(() => {
+                    alert.remove();
+                }, 5000);
+            }
+        }
+
+        // Initialize admin interface when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new AdminInterface();
+        });
+    </script>
+</body>
+</html>

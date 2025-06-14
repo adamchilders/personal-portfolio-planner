@@ -10,13 +10,21 @@ use App\Models\StockPrice;
 use App\Models\Dividend;
 use App\Services\ConfigService;
 use App\Helpers\DateTimeHelper;
+use App\Services\FinancialModelingPrepService;
 use Exception;
 
 class StockDataService
 {
     private const YAHOO_FINANCE_BASE_URL = 'https://query1.finance.yahoo.com/v8/finance/chart/';
     private const YAHOO_SEARCH_URL = 'https://query1.finance.yahoo.com/v1/finance/search';
-    
+
+    private FinancialModelingPrepService $fmpService;
+
+    public function __construct()
+    {
+        $this->fmpService = new FinancialModelingPrepService();
+    }
+
     /**
      * Search for stocks by symbol or name
      */
@@ -219,7 +227,7 @@ class StockDataService
 
             // Automatically fetch dividend data for new stocks
             $this->log("Fetching dividend data for new stock {$symbol}...");
-            $dividends = $this->fetchDividendData($symbol, 365);
+            $dividends = $this->fetchDividendDataWithFallback($symbol, 365);
             if (!empty($dividends)) {
                 $this->storeDividendData($dividends);
                 $this->log("✅ Fetched " . count($dividends) . " dividend records for {$symbol}");
@@ -426,6 +434,59 @@ class StockDataService
         $this->log("Backfill completed: {$successCount}/{$totalSymbols} stocks processed successfully");
 
         return $results;
+    }
+
+    /**
+     * Fetch dividend data with FMP fallback for complete data
+     */
+    public function fetchDividendDataWithFallback(string $symbol, int $days = 365): array
+    {
+        // First try Yahoo Finance (free)
+        $yahooDividends = $this->fetchDividendData($symbol, $days);
+
+        // If we have Yahoo data but missing payment dates, try FMP for complete data
+        if (!empty($yahooDividends) && $this->fmpService->isAvailable()) {
+            $hasPaymentDates = false;
+            foreach ($yahooDividends as $dividend) {
+                if (!empty($dividend['payment_date']) && $dividend['payment_date'] !== null) {
+                    $hasPaymentDates = true;
+                    break;
+                }
+            }
+
+            // If Yahoo data lacks payment dates, try FMP
+            if (!$hasPaymentDates) {
+                try {
+                    $this->log("Yahoo Finance data lacks payment dates for {$symbol}, trying FMP...");
+                    $fmpDividends = $this->fmpService->fetchDividendData($symbol);
+
+                    if (!empty($fmpDividends)) {
+                        $this->log("✅ Using FMP dividend data for {$symbol} (includes payment dates)");
+                        return $fmpDividends;
+                    }
+                } catch (Exception $e) {
+                    $this->log("FMP fallback failed for {$symbol}: " . $e->getMessage());
+                }
+            }
+        }
+
+        // If no Yahoo data and FMP is available, try FMP directly
+        if (empty($yahooDividends) && $this->fmpService->isAvailable()) {
+            try {
+                $this->log("No Yahoo Finance data for {$symbol}, trying FMP...");
+                $fmpDividends = $this->fmpService->fetchDividendData($symbol);
+
+                if (!empty($fmpDividends)) {
+                    $this->log("✅ Using FMP dividend data for {$symbol}");
+                    return $fmpDividends;
+                }
+            } catch (Exception $e) {
+                $this->log("FMP fallback failed for {$symbol}: " . $e->getMessage());
+            }
+        }
+
+        // Return Yahoo data (even if incomplete) or empty array
+        return $yahooDividends;
     }
 
     /**

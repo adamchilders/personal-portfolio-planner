@@ -248,26 +248,35 @@ $app->group('/api/stocks', function ($group) {
     $group->post('/backfill-historical-data', [StockController::class, 'backfillHistoricalData']);
 })->add(AuthMiddleware::class);
 
-// Admin routes group (placeholder)
+// Admin routes group
 $app->group('/admin', function ($group) {
+    // API key management
+    $group->get('/api-keys', \App\Controllers\Admin\ApiKeyController::class . ':index');
+    $group->get('/api-keys/{id}', \App\Controllers\Admin\ApiKeyController::class . ':show');
+    $group->put('/api-keys/{id}', \App\Controllers\Admin\ApiKeyController::class . ':update');
+    $group->post('/api-keys/{id}/test', \App\Controllers\Admin\ApiKeyController::class . ':test');
 
+    // Admin dashboard
     $group->get('', function (Request $request, Response $response) {
         $data = [
-            'message' => 'Admin Interface - Coming soon!',
+            'message' => 'Admin Interface',
             'features' => [
-                'User management',
                 'API key configuration',
-                'Data fetch scheduling',
-                'System monitoring',
-                'Database maintenance'
+                'Data provider management',
+                'System monitoring'
+            ],
+            'endpoints' => [
+                'GET /admin/api-keys - List all API keys',
+                'GET /admin/api-keys/{id} - Get specific API key',
+                'PUT /admin/api-keys/{id} - Update API key',
+                'POST /admin/api-keys/{id}/test - Test API key'
             ]
         ];
 
         $response->getBody()->write(json_encode($data, JSON_PRETTY_PRINT));
         return $response->withHeader('Content-Type', 'application/json');
     });
-
-});
+})->add(AuthMiddleware::class);
 
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {
