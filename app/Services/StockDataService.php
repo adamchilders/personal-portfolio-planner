@@ -217,6 +217,16 @@ class StockDataService
             $this->log("New stock {$symbol} created, fetching 1 year of historical data...");
             $this->fetchHistoricalData($symbol, 365);
 
+            // Automatically fetch dividend data for new stocks
+            $this->log("Fetching dividend data for new stock {$symbol}...");
+            $dividends = $this->fetchDividendData($symbol, 365);
+            if (!empty($dividends)) {
+                $this->storeDividendData($dividends);
+                $this->log("✅ Fetched " . count($dividends) . " dividend records for {$symbol}");
+            } else {
+                $this->log("⏭️ No dividend data found for {$symbol}");
+            }
+
             return $stock;
 
         } catch (Exception $e) {

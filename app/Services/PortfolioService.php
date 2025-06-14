@@ -268,7 +268,7 @@ class PortfolioService
      */
     public function getPortfolioSummary(Portfolio $portfolio): array
     {
-        $holdings = $portfolio->holdings()->active()->with('stock.quote')->get();
+        $holdings = $portfolio->holdings()->active()->with(['stock.quote', 'stock.dividends'])->get();
 
         $totalValue = 0;
         $totalCostBasis = 0;
@@ -280,6 +280,16 @@ class PortfolioService
 
             $totalValue += $currentValue;
             $totalCostBasis += $costBasis;
+
+            // Calculate dividend yield
+            $dividendYield = $holding->stock?->getAnnualDividendYield() ?? 0;
+            $annualDividends = 0;
+            if ($holding->stock) {
+                $annualDividends = $holding->stock->dividends()
+                    ->where('ex_date', '>=', \App\Helpers\DateTimeHelper::now()->modify('-1 year'))
+                    ->where('dividend_type', 'regular')
+                    ->sum('amount');
+            }
 
             $holdingsData[] = [
                 'symbol' => $holding->stock_symbol,
@@ -293,14 +303,20 @@ class PortfolioService
                 'cost_basis' => $costBasis,
                 'gain_loss' => $currentValue - $costBasis,
                 'gain_loss_percent' => $costBasis > 0 ? (($currentValue - $costBasis) / $costBasis) * 100 : 0,
+                'dividend_yield' => $dividendYield,
+                'annual_dividend' => $annualDividends,
                 'weight' => 0 // Will be calculated after we have total value
             ];
         }
 
-        // Calculate weights
+        // Calculate weights and portfolio dividend yield
+        $totalAnnualDividends = 0;
         foreach ($holdingsData as &$holding) {
             $holding['weight'] = $totalValue > 0 ? ($holding['current_value'] / $totalValue) * 100 : 0;
+            $totalAnnualDividends += $holding['annual_dividend'] * $holding['quantity'];
         }
+
+        $portfolioDividendYield = $totalValue > 0 ? ($totalAnnualDividends / $totalValue) * 100 : 0;
 
         return [
             'portfolio' => [
@@ -314,6 +330,8 @@ class PortfolioService
                 'total_cost_basis' => $totalCostBasis,
                 'total_gain_loss' => $totalValue - $totalCostBasis,
                 'total_gain_loss_percent' => $totalCostBasis > 0 ? (($totalValue - $totalCostBasis) / $totalCostBasis) * 100 : 0,
+                'total_annual_dividends' => $totalAnnualDividends,
+                'portfolio_dividend_yield' => $portfolioDividendYield,
                 'holdings_count' => count($holdingsData)
             ],
             'holdings' => $holdingsData

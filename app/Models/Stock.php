@@ -77,17 +77,17 @@ class Stock extends Model
     
     public function getCurrentPrice(): ?float
     {
-        return $this->quote?->current_price;
+        return $this->quote?->current_price ? (float)$this->quote->current_price : null;
     }
     
     public function getPriceChange(): ?float
     {
-        return $this->quote?->change_amount;
+        return $this->quote?->change_amount ? (float)$this->quote->change_amount : null;
     }
-    
+
     public function getPriceChangePercent(): ?float
     {
-        return $this->quote?->change_percent;
+        return $this->quote?->change_percent ? (float)$this->quote->change_percent : null;
     }
     
     public function getLatestPrice(int $days = 1): ?StockPrice

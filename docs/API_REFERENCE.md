@@ -155,12 +155,17 @@ All API responses follow this format:
     {
       "symbol": "AAPL",
       "name": "Apple Inc.",
+      "sector": "Technology",
+      "industry": "Consumer Electronics",
       "quantity": 100,
       "avg_cost_basis": 150.00,
       "current_price": 175.00,
       "current_value": 17500.00,
+      "cost_basis": 15000.00,
       "gain_loss": 2500.00,
       "gain_loss_percent": 16.67,
+      "dividend_yield": 0.52,
+      "annual_dividend": 0.96,
       "weight": 35.5
     }
   ],
@@ -168,7 +173,10 @@ All API responses follow this format:
     "total_value": 49250.00,
     "total_cost_basis": 45000.00,
     "total_gain_loss": 4250.00,
-    "total_gain_loss_percent": 9.44
+    "total_gain_loss_percent": 9.44,
+    "total_annual_dividends": 96.00,
+    "portfolio_dividend_yield": 0.19,
+    "holdings_count": 1
   }
 }
 ```
