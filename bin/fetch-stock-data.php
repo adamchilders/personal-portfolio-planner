@@ -16,6 +16,7 @@ declare(strict_types=1);
  *   --force       Force update even if data is fresh
  *   --stats       Show data freshness statistics
  *   --historical  Fetch historical price data (30 days)
+ *   --dividends   Fetch dividend data
  *   --days=N      Number of days of historical data (default: 30)
  *   --help        Show this help message
  */
@@ -34,6 +35,7 @@ class StockDataFetcher
     private bool $force = false;
     private bool $showStats = false;
     private bool $historical = false;
+    private bool $dividends = false;
     private ?int $days = null;
     
     public function __construct()
@@ -68,6 +70,16 @@ class StockDataFetcher
             if ($historicalResults['failed'] > 0) {
                 return 1;
             }
+        } elseif ($this->dividends) {
+            // Fetch dividend data
+            $days = $this->days ?? ConfigService::getHistoricalDataDays();
+            $this->log("💰 Fetching dividend data ({$days} days)...");
+            $dividendResults = $this->backgroundDataService->fetchDividendData($this->days, $this->force);
+            $this->displayResults($dividendResults, 'Dividend Data');
+
+            if ($dividendResults['failed'] > 0) {
+                return 1;
+            }
         } else {
             // Fetch fresh quote data
             $results = $this->backgroundDataService->fetchPortfolioStockData($this->force);
@@ -86,6 +98,7 @@ class StockDataFetcher
         $this->force = in_array('--force', $args);
         $this->showStats = in_array('--stats', $args);
         $this->historical = in_array('--historical', $args);
+        $this->dividends = in_array('--dividends', $args);
 
         // Parse --days=N option
         foreach ($args as $arg) {
@@ -162,6 +175,7 @@ class StockDataFetcher
         echo "  --force       Force update even if data is fresh\n";
         echo "  --stats       Show data freshness statistics before fetching\n";
         echo "  --historical  Fetch historical price data instead of quotes\n";
+        echo "  --dividends   Fetch dividend data instead of quotes\n";
         echo "  --days=N      Number of days of historical data (default: " . ConfigService::getHistoricalDataDays() . ")\n";
         echo "  --help        Show this help message\n\n";
         echo "Examples:\n";
@@ -169,7 +183,9 @@ class StockDataFetcher
         echo "  php bin/fetch-stock-data.php --stats\n";
         echo "  php bin/fetch-stock-data.php --force\n";
         echo "  php bin/fetch-stock-data.php --historical\n";
-        echo "  php bin/fetch-stock-data.php --historical --days=90\n\n";
+        echo "  php bin/fetch-stock-data.php --historical --days=90\n";
+        echo "  php bin/fetch-stock-data.php --dividends\n";
+        echo "  php bin/fetch-stock-data.php --dividends --days=365\n\n";
         echo "Recommended cron schedule:\n";
         echo "  # Every 15 minutes during market hours (9:30 AM - 4:00 PM ET)\n";
         echo "  */15 9-16 * * 1-5 /usr/bin/php /path/to/bin/fetch-stock-data.php\n\n";

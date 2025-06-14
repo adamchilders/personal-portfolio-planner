@@ -365,10 +365,38 @@ class StockDataService
             $this->log("Processing {$symbol} (" . ($index + 1) . "/{$totalSymbols})...");
 
             try {
-                $success = $this->fetchHistoricalData($symbol, $days);
+                // Fetch historical price data
+                $priceSuccess = $this->fetchHistoricalData($symbol, $days);
+
+                // Also fetch dividend data
+                $dividends = $this->fetchDividendData($symbol, $days);
+                $dividendSuccess = true;
+                if (!empty($dividends)) {
+                    $dividendSuccess = $this->storeDividendData($dividends);
+                }
+
+                $success = $priceSuccess && $dividendSuccess;
+                $message = [];
+
+                if ($priceSuccess) {
+                    $message[] = 'Historical price data fetched successfully';
+                } else {
+                    $message[] = 'Failed to fetch price data';
+                }
+
+                if (!empty($dividends)) {
+                    if ($dividendSuccess) {
+                        $message[] = count($dividends) . ' dividend records fetched';
+                    } else {
+                        $message[] = 'Failed to store dividend data';
+                    }
+                } else {
+                    $message[] = 'No dividend data found';
+                }
+
                 $results[$symbol] = [
                     'success' => $success,
-                    'message' => $success ? 'Historical data fetched successfully' : 'Failed to fetch data'
+                    'message' => implode(', ', $message)
                 ];
 
                 // Rate limiting between stocks

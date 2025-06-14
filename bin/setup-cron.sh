@@ -66,6 +66,11 @@ echo "  • Daily at 4:05 PM ET (5 minutes after market close)"
 echo "  • Fetches 1 year of historical OHLCV data"
 echo "  • Only updates missing data (smart incremental updates)"
 echo ""
+echo -e "${BLUE}Dividend Data:${NC}"
+echo "  • Daily at 4:10 PM ET (10 minutes after market close)"
+echo "  • Fetches 1 year of dividend history"
+echo "  • Updates automatically when new stocks are added"
+echo ""
 
 read -p "Do you want to proceed? (y/N): " -n 1 -r
 echo ""
@@ -98,6 +103,11 @@ add_cron_job "*/30 * * * 0,6" \
 add_cron_job "5 16 * * 1-5" \
     "/usr/bin/php $FETCH_SCRIPT --historical >/dev/null 2>&1" \
     "Portfolio Tracker - Daily Historical Data Fetch"
+
+# Dividend data: Daily at 4:10 PM ET (10 minutes after market close)
+add_cron_job "10 16 * * 1-5" \
+    "/usr/bin/php $FETCH_SCRIPT --dividends >/dev/null 2>&1" \
+    "Portfolio Tracker - Daily Dividend Data Fetch"
 
 echo -e "${GREEN}✅ Cron setup completed!${NC}"
 echo ""

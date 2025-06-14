@@ -19,7 +19,7 @@ Instead of fetching stock data on-demand (which can be slow and hit rate limits)
 - **BackgroundDataService**: Core service that manages both quote and historical data fetching
 - **StockDataService**: Updated to prioritize cached data over API calls, includes historical data methods
 - **CLI Script**: `bin/fetch-stock-data.php` for manual execution and cron jobs
-- **Database Storage**: Uses `stock_quotes` for real-time data and `stock_prices` for historical OHLCV data
+- **Database Storage**: Uses `stock_quotes` for real-time data, `stock_prices` for historical OHLCV data, and `dividends` for dividend history
 - **API Endpoints**: RESTful endpoints for accessing both current and historical data
 
 ### Data Flow
@@ -60,6 +60,12 @@ php bin/fetch-stock-data.php --historical
 # Fetch historical data for specific period
 php bin/fetch-stock-data.php --historical --days=90
 
+# Fetch dividend data (default: 365 days)
+php bin/fetch-stock-data.php --dividends
+
+# Fetch dividend data for specific period
+php bin/fetch-stock-data.php --dividends --days=365
+
 # Show data freshness statistics
 php bin/fetch-stock-data.php --stats
 
@@ -95,6 +101,9 @@ Set up cron jobs for automatic data fetching:
 
 # Historical data: Daily at 4:05 PM ET (5 minutes after market close)
 5 16 * * 1-5 /usr/bin/php /path/to/bin/fetch-stock-data.php --historical
+
+# Dividend data: Daily at 4:10 PM ET (10 minutes after market close)
+10 16 * * 1-5 /usr/bin/php /path/to/bin/fetch-stock-data.php --dividends
 ```
 
 ## Benefits
@@ -107,6 +116,7 @@ Set up cron jobs for automatic data fetching:
 ### Efficiency
 - **Minimal API calls**: Only fetch data for held stocks
 - **Smart scheduling**: More frequent updates during market hours
+- **Automatic dividend updates**: Daily dividend data fetching and new stock detection
 - **Rate limit compliance**: Built-in delays and error handling
 
 ### Reliability
@@ -192,6 +202,39 @@ GET /api/stocks/{symbol}/history?start=2025-01-01&end=2025-01-31
 }
 ```
 
+### Dividend Data
+
+```bash
+# Get dividend history (default: 365 days)
+GET /api/stocks/{symbol}/dividends
+
+# Get specific number of days
+GET /api/stocks/{symbol}/dividends?days=365
+
+# Update dividend data from Yahoo Finance
+POST /api/stocks/{symbol}/dividends/update
+
+# Example response
+{
+  "success": true,
+  "symbol": "AAPL",
+  "period_days": 365,
+  "count": 4,
+  "total_amount": 0.96,
+  "dividends": [
+    {
+      "symbol": "AAPL",
+      "ex_date": "2024-11-08",
+      "amount": 0.24,
+      "payment_date": "2024-11-14",
+      "record_date": "2024-11-11",
+      "dividend_type": "regular"
+    }
+    // ... more dividend records
+  ]
+}
+```
+
 ## Configuration
 
 ### Environment Variables
@@ -230,6 +273,7 @@ curl http://localhost:8000/api/config
 - **stocks**: Master stock information (symbol, name, exchange, etc.)
 - **stock_quotes**: Real-time quote cache with timestamps
 - **stock_prices**: Historical OHLCV data (Open, High, Low, Close, Volume)
+- **dividends**: Dividend history (ex-date, amount, payment date, etc.)
 - **portfolio_holdings**: Determines which stocks to fetch
 
 ## Development
@@ -248,8 +292,9 @@ USE_MOCK_STOCK_DATA=false php bin/fetch-stock-data.php --force
 
 When users add trades for new stocks:
 1. Stock is automatically added to the database
-2. Background job will include it in the next fetch cycle
-3. Data becomes available immediately for portfolio calculations
+2. Dividend data is fetched immediately for the new stock
+3. Background job will include it in the next fetch cycle
+4. Data becomes available immediately for portfolio calculations
 
 ## Troubleshooting
 

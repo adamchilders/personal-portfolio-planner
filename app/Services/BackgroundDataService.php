@@ -120,6 +120,7 @@ class BackgroundDataService
         
         // Ensure stock record exists
         $stock = Stock::find($symbol);
+        $isNewStock = false;
         if (!$stock) {
             $stock = Stock::create([
                 'symbol' => $symbol,
@@ -128,11 +129,18 @@ class BackgroundDataService
                 'currency' => $quoteData['currency'],
                 'is_active' => true
             ]);
+            $isNewStock = true;
         }
-        
+
         // Update the quote data
         $success = $this->stockDataService->updateStockQuote($stock, $quoteData);
-        
+
+        // If this is a new stock, fetch dividend data
+        if ($isNewStock && $success) {
+            $this->log("🆕 New stock detected: {$symbol}, fetching dividend data...");
+            $this->fetchDividendDataForStock($symbol);
+        }
+
         return $success ? 'updated' : 'failed';
     }
     
@@ -308,5 +316,137 @@ class BackgroundDataService
         $expectedRecords = $days * 0.7; // Account for weekends/holidays
 
         return $existingCount < $expectedRecords;
+    }
+
+    /**
+     * Fetch dividend data for all portfolio stocks
+     */
+    public function fetchDividendData(?int $days = null, bool $force = false): array
+    {
+        $results = [
+            'total_symbols' => 0,
+            'updated' => 0,
+            'failed' => 0,
+            'skipped' => 0,
+            'errors' => []
+        ];
+
+        try {
+            // Use configured default if not specified
+            $days = $days ?? ConfigService::getHistoricalDataDays();
+
+            $symbols = $this->getActivePortfolioSymbols();
+            $results['total_symbols'] = count($symbols);
+
+            if (empty($symbols)) {
+                $this->log('No stocks found in any portfolio for dividend data fetch');
+                return $results;
+            }
+
+            $this->log("Fetching {$days} days of dividend data for {$results['total_symbols']} stocks");
+
+            foreach ($symbols as $symbol) {
+                try {
+                    $shouldFetch = $force || $this->shouldFetchDividendData($symbol, $days);
+
+                    if (!$shouldFetch) {
+                        $results['skipped']++;
+                        $this->log("⏭️ Skipped dividend data for {$symbol} (already exists)");
+                        continue;
+                    }
+
+                    // Fetch dividend data from Yahoo Finance
+                    $dividends = $this->stockDataService->fetchDividendData($symbol, $days);
+
+                    if (!empty($dividends)) {
+                        // Store the dividend data
+                        $stored = $this->stockDataService->storeDividendData($dividends);
+
+                        if ($stored) {
+                            $results['updated']++;
+                            $this->log("✅ Fetched " . count($dividends) . " dividend records for {$symbol}");
+                        } else {
+                            $results['failed']++;
+                            $this->log("❌ Failed to store dividend data for {$symbol}");
+                            $results['errors'][] = "Failed to store dividend data for {$symbol}";
+                        }
+                    } else {
+                        $results['skipped']++;
+                        $this->log("⏭️ No dividend data found for {$symbol}");
+                    }
+
+                    // Rate limiting - longer delay for dividend data
+                    usleep(500000); // 500ms delay
+
+                } catch (Exception $e) {
+                    $results['failed']++;
+                    $error = "Error fetching dividend data for {$symbol}: " . $e->getMessage();
+                    $results['errors'][] = $error;
+                    $this->log("❌ {$error}");
+                }
+            }
+
+            $this->log("📊 Dividend data fetch completed: {$results['updated']} updated, {$results['skipped']} skipped, {$results['failed']} failed");
+
+        } catch (Exception $e) {
+            $error = "Error in dividend data fetch: " . $e->getMessage();
+            $results['errors'][] = $error;
+            $this->log("❌ {$error}");
+        }
+
+        return $results;
+    }
+
+    /**
+     * Check if we should fetch dividend data for a stock
+     */
+    private function shouldFetchDividendData(string $symbol, int $days): bool
+    {
+        // If we have no dividend data or it's been more than 7 days since last update, fetch fresh data
+        $lastUpdate = \App\Models\Dividend::where('symbol', $symbol)
+            ->orderBy('created_at', 'desc')
+            ->first();
+
+        if (!$lastUpdate) {
+            return true; // No dividend data exists
+        }
+
+        $daysSinceUpdate = DateTimeHelper::now()->diff($lastUpdate->created_at)->days;
+        return $daysSinceUpdate > 7; // Update if older than 7 days
+    }
+
+    /**
+     * Fetch dividend data for a specific stock (used when new stocks are added)
+     */
+    public function fetchDividendDataForStock(string $symbol, ?int $days = null): bool
+    {
+        try {
+            $days = $days ?? ConfigService::getHistoricalDataDays();
+
+            $this->log("Fetching dividend data for new stock: {$symbol}");
+
+            // Fetch dividend data from Yahoo Finance
+            $dividends = $this->stockDataService->fetchDividendData($symbol, $days);
+
+            if (!empty($dividends)) {
+                // Store the dividend data
+                $stored = $this->stockDataService->storeDividendData($dividends);
+
+                if ($stored) {
+                    $this->log("✅ Fetched " . count($dividends) . " dividend records for {$symbol}");
+                    return true;
+                } else {
+                    $this->log("❌ Failed to store dividend data for {$symbol}");
+                    return false;
+                }
+            } else {
+                $this->log("⏭️ No dividend data found for {$symbol}");
+                return true; // Not an error if no dividends exist
+            }
+
+        } catch (Exception $e) {
+            $this->log("❌ Error fetching dividend data for {$symbol}: " . $e->getMessage());
+            return false;
+        }
     }
 }
