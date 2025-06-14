@@ -401,6 +401,64 @@ All API responses follow this format:
 }
 ```
 
+### GET /api/stocks/{symbol}/dividends
+**Purpose**: Get dividend history for a stock
+**Authentication**: Required
+**Query Parameters**:
+- `days` (optional): Number of days to look back (default: 365, max: 1825)
+**Response**:
+```json
+{
+  "success": true,
+  "symbol": "AAPL",
+  "period_days": 365,
+  "count": 4,
+  "total_amount": 0.96,
+  "dividends": [
+    {
+      "symbol": "AAPL",
+      "ex_date": "2024-11-08",
+      "amount": 0.24,
+      "payment_date": "2024-11-14",
+      "record_date": "2024-11-11",
+      "dividend_type": "regular"
+    },
+    {
+      "symbol": "AAPL",
+      "ex_date": "2024-08-09",
+      "amount": 0.24,
+      "payment_date": "2024-08-15",
+      "record_date": "2024-08-12",
+      "dividend_type": "regular"
+    }
+  ]
+}
+```
+
+### POST /api/stocks/{symbol}/dividends/update
+**Purpose**: Fetch and update dividend data from Yahoo Finance
+**Authentication**: Required
+**Query Parameters**:
+- `days` (optional): Number of days to fetch (default: 365, max: 1825)
+**Response**:
+```json
+{
+  "success": true,
+  "symbol": "AAPL",
+  "message": "Dividend data updated successfully",
+  "count": 4,
+  "total_amount": 0.96,
+  "dividends": [
+    {
+      "symbol": "AAPL",
+      "ex_date": "2024-11-08",
+      "amount": 0.24,
+      "timestamp": 1731024000
+    }
+  ]
+}
+```
+
 ### POST /api/stocks/{symbol}/update-quote
 **Purpose**: Force update stock quote from external API
 **Authentication**: Required

@@ -7,6 +7,7 @@ namespace App\Services;
 use App\Models\Stock;
 use App\Models\StockQuote;
 use App\Models\StockPrice;
+use App\Models\Dividend;
 use App\Services\ConfigService;
 use App\Helpers\DateTimeHelper;
 use Exception;
@@ -387,6 +388,119 @@ class StockDataService
         $this->log("Backfill completed: {$successCount}/{$totalSymbols} stocks processed successfully");
 
         return $results;
+    }
+
+    /**
+     * Fetch dividend data for a stock
+     */
+    public function fetchDividendData(string $symbol, int $days = 365): array
+    {
+        try {
+            $endDate = new \DateTime();
+            $startDate = (clone $endDate)->modify("-{$days} days");
+
+            // Use Yahoo Finance chart API with events=div to get dividend data
+            $url = self::YAHOO_FINANCE_BASE_URL . urlencode($symbol) .
+                   '?period1=' . $startDate->getTimestamp() .
+                   '&period2=' . $endDate->getTimestamp() .
+                   '&interval=1d&events=div';
+
+            $this->log("Fetching dividend data for {$symbol} from {$startDate->format('Y-m-d')} to {$endDate->format('Y-m-d')}");
+
+            $response = $this->makeHttpRequest($url);
+            $data = json_decode($response, true);
+
+            if (!isset($data['chart']['result'][0])) {
+                $this->log("No dividend data found for {$symbol}");
+                return [];
+            }
+
+            $result = $data['chart']['result'][0];
+
+            // Check if dividend events exist
+            if (!isset($result['events']['dividends'])) {
+                $this->log("No dividend events found for {$symbol}");
+                return [];
+            }
+
+            $dividends = [];
+            foreach ($result['events']['dividends'] as $timestamp => $dividendData) {
+                $dividends[] = [
+                    'symbol' => $symbol,
+                    'ex_date' => date('Y-m-d', $timestamp),
+                    'amount' => (float)$dividendData['amount'],
+                    'timestamp' => $timestamp
+                ];
+            }
+
+            // Sort by date (newest first)
+            usort($dividends, function($a, $b) {
+                return $b['timestamp'] - $a['timestamp'];
+            });
+
+            $this->log("Found " . count($dividends) . " dividend payments for {$symbol}");
+            return $dividends;
+
+        } catch (Exception $e) {
+            $this->log("Error fetching dividend data for {$symbol}: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Get dividend history for a stock from database
+     */
+    public function getDividendHistory(string $symbol, int $days = 365): array
+    {
+        try {
+            $cutoffDate = (new \DateTime())->modify("-{$days} days")->format('Y-m-d');
+
+            $dividends = Dividend::where('symbol', $symbol)
+                ->where('ex_date', '>=', $cutoffDate)
+                ->orderBy('ex_date', 'desc')
+                ->get();
+
+            return $dividends->map(function ($dividend) {
+                return [
+                    'symbol' => $dividend->symbol,
+                    'ex_date' => $dividend->ex_date,
+                    'amount' => (float)$dividend->amount,
+                    'payment_date' => $dividend->payment_date,
+                    'record_date' => $dividend->record_date,
+                    'dividend_type' => $dividend->dividend_type
+                ];
+            })->toArray();
+
+        } catch (Exception $e) {
+            error_log("Error getting dividend history for {$symbol}: " . $e->getMessage());
+            return [];
+        }
+    }
+
+    /**
+     * Store dividend data in database
+     */
+    public function storeDividendData(array $dividends): bool
+    {
+        try {
+            foreach ($dividends as $dividend) {
+                Dividend::updateOrCreate(
+                    [
+                        'symbol' => $dividend['symbol'],
+                        'ex_date' => $dividend['ex_date']
+                    ],
+                    [
+                        'amount' => $dividend['amount'],
+                        'dividend_type' => 'regular'
+                    ]
+                );
+            }
+
+            return true;
+        } catch (Exception $e) {
+            error_log("Error storing dividend data: " . $e->getMessage());
+            return false;
+        }
     }
 
     /**

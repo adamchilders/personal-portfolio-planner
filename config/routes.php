@@ -217,6 +217,8 @@ $app->group('/api', function ($group) {
                     'GET /api/stocks/search?q={query}' => 'Search for stocks',
                     'GET /api/stocks/{symbol}/quote' => 'Get current stock quote',
                     'GET /api/stocks/{symbol}/history' => 'Get historical price data',
+                    'GET /api/stocks/{symbol}/dividends' => 'Get dividend history for stock',
+                    'POST /api/stocks/{symbol}/dividends/update' => 'Fetch and update dividend data from Yahoo Finance',
                     'GET /api/stocks/{symbol}' => 'Get stock information',
                     'POST /api/stocks/{symbol}/update-quote' => 'Update stock quote',
                     'POST /api/stocks/quotes' => 'Get multiple stock quotes',
@@ -237,6 +239,8 @@ $app->group('/api/stocks', function ($group) {
     $group->get('/search', [StockController::class, 'search']);
     $group->get('/{symbol:[A-Z0-9.-]+}/quote', [StockController::class, 'quote']);
     $group->get('/{symbol:[A-Z0-9.-]+}/history', [StockController::class, 'history']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/dividends', [StockController::class, 'dividends']);
+    $group->post('/{symbol:[A-Z0-9.-]+}/dividends/update', [StockController::class, 'updateDividends']);
     $group->get('/{symbol:[A-Z0-9.-]+}', [StockController::class, 'show']);
     $group->post('/{symbol:[A-Z0-9.-]+}/update-quote', [StockController::class, 'updateQuote']);
     $group->post('/quotes', [StockController::class, 'multipleQuotes']);

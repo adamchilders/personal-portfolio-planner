@@ -383,6 +383,83 @@ class StockController
         return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
     }
 
+    /**
+     * Get dividend history for a stock
+     */
+    public function dividends(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol'] ?? '');
+
+        if (empty($symbol)) {
+            return $this->errorResponse($response, 'Stock symbol is required', 400);
+        }
+
+        $queryParams = $request->getQueryParams();
+        $days = min((int)($queryParams['days'] ?? 365), 1825); // Max 5 years
+
+        try {
+            $dividends = $this->stockDataService->getDividendHistory($symbol, $days);
+
+            return $this->successResponse($response, [
+                'symbol' => $symbol,
+                'period_days' => $days,
+                'dividends' => $dividends,
+                'count' => count($dividends),
+                'total_amount' => array_sum(array_column($dividends, 'amount'))
+            ]);
+        } catch (\Exception $e) {
+            error_log("Error getting dividend history for {$symbol}: " . $e->getMessage());
+            return $this->errorResponse($response, 'Failed to get dividend history', 500);
+        }
+    }
+
+    /**
+     * Fetch and update dividend data from Yahoo Finance
+     */
+    public function updateDividends(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol'] ?? '');
+
+        if (empty($symbol)) {
+            return $this->errorResponse($response, 'Stock symbol is required', 400);
+        }
+
+        $queryParams = $request->getQueryParams();
+        $days = min((int)($queryParams['days'] ?? 365), 1825); // Max 5 years
+
+        try {
+            // Fetch fresh dividend data from Yahoo Finance
+            $dividends = $this->stockDataService->fetchDividendData($symbol, $days);
+
+            if (empty($dividends)) {
+                return $this->successResponse($response, [
+                    'symbol' => $symbol,
+                    'message' => 'No dividend data found',
+                    'dividends' => [],
+                    'count' => 0
+                ]);
+            }
+
+            // Store the dividend data
+            $stored = $this->stockDataService->storeDividendData($dividends);
+
+            if (!$stored) {
+                return $this->errorResponse($response, 'Failed to store dividend data', 500);
+            }
+
+            return $this->successResponse($response, [
+                'symbol' => $symbol,
+                'message' => 'Dividend data updated successfully',
+                'dividends' => $dividends,
+                'count' => count($dividends),
+                'total_amount' => array_sum(array_column($dividends, 'amount'))
+            ]);
+        } catch (\Exception $e) {
+            error_log("Error updating dividend data for {$symbol}: " . $e->getMessage());
+            return $this->errorResponse($response, 'Failed to update dividend data', 500);
+        }
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [
