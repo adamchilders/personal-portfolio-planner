@@ -284,7 +284,7 @@ $app->group('/admin', function ($group) {
         $response->getBody()->write(json_encode($data, JSON_PRETTY_PRINT));
         return $response->withHeader('Content-Type', 'application/json');
     });
-})->add(AuthMiddleware::class);
+})->add(AdminMiddleware::class)->add(AuthMiddleware::class);
 
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {

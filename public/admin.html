@@ -224,8 +224,15 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>Portfolio Tracker - Admin Interface</h1>
-            <p>Manage API keys and data providers</p>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+                <div>
+                    <h1>Portfolio Tracker - Admin Interface</h1>
+                    <p>Manage API keys and data providers</p>
+                </div>
+                <div>
+                    <button id="logout-btn" class="btn btn-warning" style="display: none;">Logout</button>
+                </div>
+            </div>
         </div>
 
         <div id="alerts"></div>
@@ -290,19 +297,138 @@
         // Simple admin interface for API key management
         class AdminInterface {
             constructor() {
+                this.authToken = null;
                 this.init();
             }
 
             async init() {
-                await this.loadApiKeys();
-                await this.loadDataProviderConfig();
-                await this.loadUsers();
-                this.setupEventListeners();
+                // Check if user is logged in and is admin
+                await this.checkAuthentication();
+
+                if (this.authToken) {
+                    document.getElementById('logout-btn').style.display = 'block';
+                    await this.loadApiKeys();
+                    await this.loadDataProviderConfig();
+                    await this.loadUsers();
+                    this.setupEventListeners();
+                } else {
+                    this.showLoginForm();
+                }
+            }
+
+            async checkAuthentication() {
+                // Check for existing auth token in localStorage
+                this.authToken = localStorage.getItem('auth_token');
+
+                if (this.authToken) {
+                    try {
+                        const response = await fetch('/auth/me', {
+                            headers: {
+                                'Authorization': 'Bearer ' + this.authToken
+                            }
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            if (data.success && data.user.role === 'admin') {
+                                this.showAlert(`Welcome, ${data.user.username}! You have admin access.`, 'success');
+                                return;
+                            } else {
+                                this.showAlert('Access denied: Admin role required', 'error');
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Auth check failed:', error);
+                    }
+                }
+
+                // Clear invalid token
+                this.authToken = null;
+                localStorage.removeItem('auth_token');
+            }
+
+            showLoginForm() {
+                const container = document.querySelector('.container');
+                container.innerHTML = `
+                    <div class="header">
+                        <h1>Portfolio Tracker - Admin Login</h1>
+                        <p>Please log in with an admin account to access the admin interface</p>
+                    </div>
+
+                    <div id="alerts"></div>
+
+                    <div class="card" style="max-width: 400px; margin: 2rem auto;">
+                        <h2>Admin Login</h2>
+                        <form id="admin-login-form">
+                            <div class="form-group">
+                                <label for="login-identifier">Username or Email</label>
+                                <input type="text" id="login-identifier" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="login-password">Password</label>
+                                <input type="password" id="login-password" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary" style="width: 100%;">Login</button>
+                        </form>
+                        <div style="margin-top: 1rem; text-align: center;">
+                            <a href="/" style="color: var(--primary-blue);">← Back to Portfolio Tracker</a>
+                        </div>
+                    </div>
+                `;
+
+                // Setup login form handler
+                document.getElementById('admin-login-form').addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    await this.handleLogin();
+                });
+            }
+
+            async handleLogin() {
+                const identifier = document.getElementById('login-identifier').value;
+                const password = document.getElementById('login-password').value;
+
+                try {
+                    const response = await fetch('/auth/login', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            identifier: identifier,
+                            password: password
+                        })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.success) {
+                        if (data.user.role === 'admin') {
+                            this.authToken = data.token;
+                            localStorage.setItem('auth_token', data.token);
+                            this.showAlert('Login successful! Loading admin interface...', 'success');
+
+                            // Reload the page to show admin interface
+                            setTimeout(() => {
+                                window.location.reload();
+                            }, 1000);
+                        } else {
+                            this.showAlert('Access denied: Admin role required', 'error');
+                        }
+                    } else {
+                        this.showAlert('Login failed: ' + data.message, 'error');
+                    }
+                } catch (error) {
+                    this.showAlert('Login error: ' + error.message, 'error');
+                }
             }
 
             async loadApiKeys() {
                 try {
-                    const response = await fetch('/admin/api-keys');
+                    const response = await fetch('/admin/api-keys', {
+                        headers: {
+                            'Authorization': 'Bearer ' + this.authToken
+                        }
+                    });
                     const data = await response.json();
                     
                     if (data.success) {
@@ -344,7 +470,11 @@
 
             async loadDataProviderConfig() {
                 try {
-                    const response = await fetch('/admin/data-providers');
+                    const response = await fetch('/admin/data-providers', {
+                        headers: {
+                            'Authorization': 'Bearer ' + this.authToken
+                        }
+                    });
                     const data = await response.json();
 
                     if (data.success) {
@@ -405,7 +535,11 @@
 
             async loadUsers() {
                 try {
-                    const response = await fetch('/admin/users');
+                    const response = await fetch('/admin/users', {
+                        headers: {
+                            'Authorization': 'Bearer ' + this.authToken
+                        }
+                    });
                     const data = await response.json();
 
                     if (data.success) {
@@ -453,6 +587,11 @@
             }
 
             setupEventListeners() {
+                // Logout button
+                document.getElementById('logout-btn').addEventListener('click', () => {
+                    this.logout();
+                });
+
                 // FMP configuration form
                 document.getElementById('fmp-config-form').addEventListener('submit', async (e) => {
                     e.preventDefault();
@@ -463,6 +602,15 @@
                 document.getElementById('test-dividend-btn').addEventListener('click', async () => {
                     await this.testDividendFetch();
                 });
+            }
+
+            logout() {
+                localStorage.removeItem('auth_token');
+                this.authToken = null;
+                this.showAlert('Logged out successfully', 'success');
+                setTimeout(() => {
+                    window.location.reload();
+                }, 1000);
             }
 
             async saveFmpConfig() {
@@ -502,7 +650,10 @@
                 try {
                     // Test the dividend endpoint
                     const response = await fetch(`/api/stocks/${symbol}/dividends/update`, {
-                        method: 'POST'
+                        method: 'POST',
+                        headers: {
+                            'Authorization': 'Bearer ' + this.authToken
+                        }
                     });
                     const data = await response.json();
                     
@@ -535,7 +686,8 @@
                     const response = await fetch(`/admin/data-providers/${configId}`, {
                         method: 'PUT',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + this.authToken
                         },
                         body: JSON.stringify(data)
                     });
@@ -557,7 +709,8 @@
                     const response = await fetch(`/admin/users/${userId}/role`, {
                         method: 'PUT',
                         headers: {
-                            'Content-Type': 'application/json'
+                            'Content-Type': 'application/json',
+                            'Authorization': 'Bearer ' + this.authToken
                         },
                         body: JSON.stringify({ role: newRole })
                     });
