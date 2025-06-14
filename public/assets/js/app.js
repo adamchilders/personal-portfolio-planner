@@ -751,7 +751,26 @@ class PortfolioApp {
 
             this.showLoading('Loading stock information...');
 
-            const stockData = await this.apiCall(`/stocks/${symbol}`);
+            // Fetch both stock data and dividend data
+            const [stockData, dividendData] = await Promise.all([
+                this.apiCall(`/stocks/${symbol}`),
+                this.apiCall(`/stocks/${symbol}/dividends?days=365`).catch(error => {
+                    console.warn(`Failed to fetch dividend data for ${symbol}:`, error);
+                    return { success: false, dividends: [], total_amount: 0, count: 0 };
+                })
+            ]);
+
+            // Add dividend data to stock data
+            stockData.dividends = dividendData.success ? dividendData.dividends : [];
+            stockData.annual_dividend = dividendData.success ? dividendData.total_amount : 0;
+            stockData.dividend_count = dividendData.success ? dividendData.count : 0;
+
+            // Calculate dividend yield
+            if (stockData.quote && stockData.quote.current_price && stockData.annual_dividend) {
+                stockData.dividend_yield = (stockData.annual_dividend / stockData.quote.current_price) * 100;
+            } else {
+                stockData.dividend_yield = 0;
+            }
 
             // Restore app content before showing modal
             document.getElementById('app').innerHTML = currentAppContent;
@@ -1033,6 +1052,12 @@ class PortfolioApp {
             this.showLoading('Loading portfolio details...');
 
             const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
+
+            // Fetch dividend data for each holding
+            if (portfolio.holdings && portfolio.holdings.length > 0) {
+                await this.enrichHoldingsWithDividendData(portfolio.holdings);
+            }
+
             document.getElementById('app').innerHTML = this.getPortfolioDetailHTML(portfolio);
 
             // Initialize charts after DOM is ready
@@ -1042,6 +1067,63 @@ class PortfolioApp {
         } catch (error) {
             this.showError('Failed to load portfolio details');
             console.error('Portfolio detail error:', error);
+        }
+    }
+
+    async enrichHoldingsWithDividendData(holdings) {
+        try {
+            // Fetch dividend data for all unique symbols
+            const symbols = [...new Set(holdings.map(h => h.symbol))];
+            const dividendPromises = symbols.map(symbol =>
+                this.apiCall(`/stocks/${symbol}/dividends?days=365`).catch(error => {
+                    console.warn(`Failed to fetch dividend data for ${symbol}:`, error);
+                    return { success: false, symbol };
+                })
+            );
+
+            const dividendResponses = await Promise.all(dividendPromises);
+
+            // Create a map of symbol to dividend data
+            const dividendMap = {};
+            dividendResponses.forEach(response => {
+                if (response.success && response.dividends) {
+                    const symbol = response.symbol;
+                    const totalDividends = response.total_amount || 0;
+                    dividendMap[symbol] = {
+                        annual_dividend: totalDividends,
+                        dividend_count: response.count || 0,
+                        dividends: response.dividends || []
+                    };
+                }
+            });
+
+            // Enrich holdings with dividend data
+            holdings.forEach(holding => {
+                const dividendData = dividendMap[holding.symbol];
+                if (dividendData) {
+                    holding.annual_dividend = dividendData.annual_dividend;
+                    holding.dividend_yield = holding.current_price > 0
+                        ? (dividendData.annual_dividend / holding.current_price) * 100
+                        : 0;
+                    holding.dividend_count = dividendData.dividend_count;
+                    holding.dividends = dividendData.dividends;
+                } else {
+                    holding.annual_dividend = 0;
+                    holding.dividend_yield = 0;
+                    holding.dividend_count = 0;
+                    holding.dividends = [];
+                }
+            });
+
+        } catch (error) {
+            console.error('Error enriching holdings with dividend data:', error);
+            // Set default values if dividend fetching fails
+            holdings.forEach(holding => {
+                holding.annual_dividend = 0;
+                holding.dividend_yield = 0;
+                holding.dividend_count = 0;
+                holding.dividends = [];
+            });
         }
     }
 
@@ -2224,6 +2306,7 @@ class PortfolioApp {
                             <th style="text-align: right;">Current Price</th>
                             <th style="text-align: right;">Market Value</th>
                             <th style="text-align: right;">Gain/Loss</th>
+                            <th style="text-align: right;">Div Yield</th>
                             <th style="text-align: right;">Weight</th>
                             <th style="text-align: right;">Actions</th>
                         </tr>
@@ -2255,6 +2338,14 @@ class PortfolioApp {
                                     </div>
                                     <div style="font-size: var(--font-size-sm); color: ${holding.gain_loss_percent >= 0 ? 'var(--success-green)' : 'var(--danger-red)'};">
                                         ${holding.gain_loss_percent >= 0 ? '+' : ''}${holding.gain_loss_percent.toFixed(2)}%
+                                    </div>
+                                </td>
+                                <td style="text-align: right;">
+                                    <div style="color: var(--success-green); font-weight: 500;">
+                                        ${holding.dividend_yield ? holding.dividend_yield.toFixed(2) + '%' : 'N/A'}
+                                    </div>
+                                    <div style="font-size: var(--font-size-xs); color: var(--gray-500);">
+                                        ${holding.annual_dividend ? '$' + this.formatNumber(holding.annual_dividend) : ''}
                                     </div>
                                 </td>
                                 <td style="text-align: right;">
@@ -2380,6 +2471,13 @@ class PortfolioApp {
                                 </div>
 
                                 <div class="metric-card">
+                                    <div class="metric-value" style="color: var(--success-green);">
+                                        ${this.calculatePortfolioDividendYield(holdings).toFixed(2)}%
+                                    </div>
+                                    <div class="metric-label">Dividend Yield</div>
+                                </div>
+
+                                <div class="metric-card">
                                     <div class="metric-value">
                                         ${this.calculateDiversificationScore(holdings).toFixed(1)}
                                     </div>
@@ -2432,6 +2530,22 @@ class PortfolioApp {
         const concentrationPenalty = maxWeight > 50 ? (maxWeight - 50) : 0; // Penalty for concentration
 
         return Math.max(0, Math.min(100, baseScore - concentrationPenalty));
+    }
+
+    calculatePortfolioDividendYield(holdings) {
+        if (!holdings || holdings.length === 0) return 0;
+
+        let totalDividends = 0;
+        let totalValue = 0;
+
+        holdings.forEach(holding => {
+            if (holding.annual_dividend && holding.current_value) {
+                totalDividends += holding.annual_dividend * holding.quantity;
+                totalValue += holding.current_value;
+            }
+        });
+
+        return totalValue > 0 ? (totalDividends / totalValue) * 100 : 0;
     }
 
     getTradeHistoryPageHTML(portfolio, transactions, portfolioId) {
@@ -2677,10 +2791,46 @@ class PortfolioApp {
                             <span class="badge ${quote.market_state === 'REGULAR' ? 'badge-success' : 'badge-warning'}">${quote.market_state_label || quote.market_state}</span>
                         </div>
 
-                        <div class="flex justify-between items-center">
+                        <div class="flex justify-between items-center mb-4">
                             <span class="text-muted">Exchange:</span>
                             <span>${stockData.exchange || 'N/A'}</span>
                         </div>
+
+                        <!-- Dividend Information -->
+                        <div class="grid grid-cols-2 gap-4 mb-4" style="background: var(--gray-50); padding: var(--space-4); border-radius: var(--radius-md);">
+                            <div class="text-center">
+                                <div style="font-weight: 600; margin-bottom: var(--space-1); color: var(--success-green);">
+                                    ${stockData.dividend_yield ? stockData.dividend_yield.toFixed(2) + '%' : 'N/A'}
+                                </div>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">Dividend Yield</div>
+                            </div>
+                            <div class="text-center">
+                                <div style="font-weight: 600; margin-bottom: var(--space-1);">
+                                    ${stockData.annual_dividend ? '$' + this.formatNumber(stockData.annual_dividend) : 'N/A'}
+                                </div>
+                                <div class="text-muted" style="font-size: var(--font-size-sm);">Annual Dividend</div>
+                            </div>
+                        </div>
+
+                        ${stockData.dividends && stockData.dividends.length > 0 ? `
+                            <div class="mb-4">
+                                <h5 style="margin-bottom: var(--space-3);">Recent Dividends (${stockData.dividend_count} payments)</h5>
+                                <div style="max-height: 150px; overflow-y: auto;">
+                                    ${stockData.dividends.slice(0, 5).map(dividend => `
+                                        <div class="flex justify-between items-center py-2" style="border-bottom: 1px solid var(--gray-100);">
+                                            <div>
+                                                <div style="font-weight: 500;">${new Date(dividend.ex_date).toLocaleDateString()}</div>
+                                                <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Ex-Date</div>
+                                            </div>
+                                            <div class="text-right">
+                                                <div style="font-weight: 600; color: var(--success-green);">$${this.formatNumber(dividend.amount)}</div>
+                                                <div style="font-size: var(--font-size-xs); color: var(--gray-500);">${dividend.dividend_type || 'Regular'}</div>
+                                            </div>
+                                        </div>
+                                    `).join('')}
+                                </div>
+                            </div>
+                        ` : ''}
                     ` : `
                         <div class="text-center py-8">
                             <div class="text-muted">No current quote data available</div>
