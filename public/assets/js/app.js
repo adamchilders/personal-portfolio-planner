@@ -415,7 +415,7 @@ class PortfolioApp {
             this.showLoading('Loading trade history...');
 
             const response = await this.apiCall(`/portfolios/${portfolioId}/transactions`);
-            this.showModal(this.getTradeHistoryModalHTML(response.transactions || [], portfolioId));
+            this.showModal(this.getTradeHistoryModalHTML(response.data || [], portfolioId));
         } catch (error) {
             this.showError('Failed to load trade history');
             console.error('Trade history error:', error);
@@ -552,7 +552,7 @@ class PortfolioApp {
             const portfolioId = this.getCurrentPortfolioId();
             const response = await this.apiCall(`/portfolios/${portfolioId}/transactions?symbol=${symbol}`);
 
-            this.showModal(this.getHoldingTradesModalHTML(response.transactions || [], symbol, portfolioId));
+            this.showModal(this.getHoldingTradesModalHTML(response.data || [], symbol, portfolioId));
         } catch (error) {
             this.showError('Failed to load holding trades');
             console.error('Holding trades error:', error);
