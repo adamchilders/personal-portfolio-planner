@@ -206,10 +206,18 @@ class PortfolioApp {
                 }
             } else {
                 this.showError(response.error || 'Login failed');
+                // Return to login form after showing error
+                setTimeout(() => {
+                    this.showLogin();
+                }, 2000);
             }
         } catch (error) {
             this.showError('Login failed. Please try again.');
             console.error('Login error:', error);
+            // Return to login form after showing error
+            setTimeout(() => {
+                this.showLogin();
+            }, 2000);
         }
     }
     
@@ -250,10 +258,18 @@ class PortfolioApp {
                 this.showWelcomeWalkthrough();
             } else {
                 this.showError(response.error || 'Registration failed');
+                // Return to registration form after showing error
+                setTimeout(() => {
+                    this.showRegister();
+                }, 2000);
             }
         } catch (error) {
             this.showError('Registration failed. Please try again.');
             console.error('Registration error:', error);
+            // Return to registration form after showing error
+            setTimeout(() => {
+                this.showRegister();
+            }, 2000);
         }
     }
     
