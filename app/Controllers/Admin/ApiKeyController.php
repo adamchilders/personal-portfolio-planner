@@ -209,7 +209,8 @@ class ApiKeyController extends BaseController
                     ];
                 }),
                 'available_providers' => $availableProviders,
-                'data_types' => $dataTypes
+                'data_types' => $dataTypes,
+                'provider_capabilities' => DataProviderConfig::getProviderCapabilities()
             ]);
 
         } catch (\Exception $e) {

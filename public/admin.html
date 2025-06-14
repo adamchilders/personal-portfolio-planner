@@ -478,6 +478,7 @@
                     const data = await response.json();
 
                     if (data.success) {
+                        this.providerCapabilities = data.provider_capabilities || this.getDefaultCapabilities();
                         this.renderDataProviderConfig(data.configurations, data.available_providers);
                     } else {
                         this.showAlert('Failed to load data provider configurations: ' + data.message, 'error');
@@ -485,6 +486,27 @@
                 } catch (error) {
                     this.showAlert('Error loading data provider configurations: ' + error.message, 'error');
                 }
+            }
+
+            getDefaultCapabilities() {
+                return {
+                    'yahoo_finance': [
+                        'stock_quotes',
+                        'historical_prices',
+                        'dividend_data',
+                        'company_profiles'
+                    ],
+                    'financial_modeling_prep': [
+                        'stock_quotes',
+                        'historical_prices',
+                        'dividend_data',
+                        'company_profiles',
+                        'financial_statements',
+                        'analyst_estimates',
+                        'insider_trading',
+                        'institutional_holdings'
+                    ]
+                };
             }
 
             renderDataProviderConfig(configurations, availableProviders) {
@@ -495,42 +517,61 @@
                     return;
                 }
 
-                const html = configurations.map(config => `
-                    <div style="border: 1px solid var(--gray-200); border-radius: 0.375rem; padding: 1rem; margin-bottom: 1rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
-                            <strong>${config.data_type_label}</strong>
-                            <span class="status-badge ${config.is_active ? 'status-active' : 'status-inactive'}">
-                                ${config.is_active ? 'Active' : 'Inactive'}
-                            </span>
-                        </div>
-                        <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
-                            <div class="form-group">
-                                <label>Primary Provider</label>
-                                <select data-config-id="${config.id}" data-field="primary_provider">
-                                    ${Object.entries(availableProviders).map(([key, label]) =>
-                                        `<option value="${key}" ${config.primary_provider === key ? 'selected' : ''}>${label}</option>`
-                                    ).join('')}
-                                </select>
+                const html = configurations.map(config => {
+                    // Filter providers based on capabilities for this data type
+                    const supportedProviders = this.getSupportedProviders(config.data_type, availableProviders);
+
+                    return `
+                        <div style="border: 1px solid var(--gray-200); border-radius: 0.375rem; padding: 1rem; margin-bottom: 1rem;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem;">
+                                <strong>${config.data_type_label}</strong>
+                                <span class="status-badge ${config.is_active ? 'status-active' : 'status-inactive'}">
+                                    ${config.is_active ? 'Active' : 'Inactive'}
+                                </span>
                             </div>
-                            <div class="form-group">
-                                <label>Fallback Provider</label>
-                                <select data-config-id="${config.id}" data-field="fallback_provider">
-                                    <option value="">None</option>
-                                    ${Object.entries(availableProviders).map(([key, label]) =>
-                                        `<option value="${key}" ${config.fallback_provider === key ? 'selected' : ''}>${label}</option>`
-                                    ).join('')}
-                                </select>
+                            <div class="grid" style="grid-template-columns: 1fr 1fr; gap: 1rem;">
+                                <div class="form-group">
+                                    <label>Primary Provider</label>
+                                    <select data-config-id="${config.id}" data-field="primary_provider">
+                                        ${Object.entries(supportedProviders).map(([key, label]) =>
+                                            `<option value="${key}" ${config.primary_provider === key ? 'selected' : ''}>${label}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label>Fallback Provider</label>
+                                    <select data-config-id="${config.id}" data-field="fallback_provider">
+                                        <option value="">None</option>
+                                        ${Object.entries(supportedProviders).map(([key, label]) =>
+                                            `<option value="${key}" ${config.fallback_provider === key ? 'selected' : ''}>${label}</option>`
+                                        ).join('')}
+                                    </select>
+                                </div>
+                            </div>
+                            <div style="margin-top: 1rem;">
+                                <button class="btn btn-primary btn-sm" onclick="adminInterface.saveDataProviderConfig(${config.id})">
+                                    Save Configuration
+                                </button>
                             </div>
                         </div>
-                        <div style="margin-top: 1rem;">
-                            <button class="btn btn-primary btn-sm" onclick="adminInterface.saveDataProviderConfig(${config.id})">
-                                Save Configuration
-                            </button>
-                        </div>
-                    </div>
-                `).join('');
+                    `;
+                }).join('');
 
                 container.innerHTML = html;
+            }
+
+            getSupportedProviders(dataType, availableProviders) {
+                const capabilities = this.providerCapabilities || this.getDefaultCapabilities();
+                const supportedProviders = {};
+
+                // Filter providers that support this data type
+                Object.entries(availableProviders).forEach(([providerKey, providerLabel]) => {
+                    if (capabilities[providerKey] && capabilities[providerKey].includes(dataType)) {
+                        supportedProviders[providerKey] = providerLabel;
+                    }
+                });
+
+                return supportedProviders;
             }
 
             async loadUsers() {
