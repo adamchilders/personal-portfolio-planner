@@ -100,7 +100,7 @@ class PortfolioApp {
                 this.showAddTradeModal(element.dataset.portfolioId);
                 break;
             case 'show-trade-history':
-                this.showTradeHistoryModal(element.dataset.portfolioId);
+                this.showTradeHistory(element.dataset.portfolioId);
                 break;
             case 'show-stock-detail':
                 this.showStockDetailModal(element.dataset.symbol);
@@ -410,19 +410,20 @@ class PortfolioApp {
         }
     }
 
-    async showTradeHistoryModal(portfolioId) {
+    async showTradeHistory(portfolioId) {
         try {
-            // Store current app content before showing loading
-            const currentAppContent = document.getElementById('app').innerHTML;
-
             this.showLoading('Loading trade history...');
 
-            const response = await this.apiCall(`/portfolios/${portfolioId}/transactions`);
+            const [portfolioResponse, transactionsResponse] = await Promise.all([
+                this.apiCall(`/portfolios/${portfolioId}`),
+                this.apiCall(`/portfolios/${portfolioId}/transactions`)
+            ]);
 
-            // Restore app content before showing modal
-            document.getElementById('app').innerHTML = currentAppContent;
-
-            this.showModal(this.getTradeHistoryModalHTML(response.data || [], portfolioId));
+            document.getElementById('app').innerHTML = this.getTradeHistoryPageHTML(
+                portfolioResponse,
+                transactionsResponse.data || [],
+                portfolioId
+            );
         } catch (error) {
             this.showError('Failed to load trade history');
             console.error('Trade history error:', error);
@@ -2198,112 +2199,194 @@ class PortfolioApp {
         return Math.max(0, Math.min(100, baseScore - concentrationPenalty));
     }
 
-    getTradeHistoryModalHTML(transactions, portfolioId) {
+    getTradeHistoryPageHTML(portfolio, transactions, portfolioId) {
         return `
-            <div class="modal-content">
-                <div class="card card-lg" style="max-width: 800px; margin: 0 auto;">
-                    <div class="flex justify-between items-center mb-6">
-                        <h3 style="margin-bottom: 0;">Trade History</h3>
-                        <div class="flex gap-2">
-                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary btn-sm">+ Add Trade</button>
-                            <button data-action="close-modal" class="btn btn-secondary" style="padding: 0.25rem 0.5rem;">×</button>
+            <div class="trade-history-page">
+                <!-- Header -->
+                <header style="background: white; border-bottom: 1px solid var(--gray-200); padding: var(--space-4) 0;">
+                    <div class="container">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-4">
+                                <button data-action="view-portfolio" data-portfolio-id="${portfolioId}" class="btn btn-secondary">
+                                    ← Back to Portfolio
+                                </button>
+                                <div>
+                                    <h3 style="margin-bottom: 0;">Trade History</h3>
+                                    <p class="text-muted" style="margin-bottom: 0;">${portfolio.portfolio?.name || 'Portfolio'}</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">+ Add Trade</button>
+                                <button data-action="logout" class="btn btn-secondary">Sign Out</button>
+                            </div>
                         </div>
                     </div>
+                </header>
 
-                    ${transactions.length === 0 ? `
-                        <div class="text-center py-8">
-                            <div style="font-size: 2rem; margin-bottom: var(--space-3); opacity: 0.3;">📈</div>
-                            <h4>No Trades Yet</h4>
-                            <p class="text-muted mb-4">Start by recording your first buy or sell trade.</p>
-                            <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">Record First Trade</button>
-                        </div>
-                    ` : `
-                        <div style="max-height: 400px; overflow-y: auto;">
-                            <table style="width: 100%; border-collapse: collapse;">
-                                <thead style="position: sticky; top: 0; background: white; z-index: 1;">
-                                    <tr style="border-bottom: 2px solid var(--gray-200);">
-                                        <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Date</th>
-                                        <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Symbol</th>
-                                        <th style="text-align: center; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Type</th>
-                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Shares</th>
-                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Price</th>
-                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Total</th>
-                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Fees</th>
-                                        <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${transactions.map(trade => {
-                                        const total = trade.quantity * trade.price;
-                                        const tradeDate = new Date(trade.transaction_date).toLocaleDateString();
-                                        const isBuy = trade.transaction_type === 'buy';
-
-                                        return `
-                                            <tr style="border-bottom: 1px solid var(--gray-100);">
-                                                <td style="padding: var(--space-3);">
-                                                    <div style="font-size: var(--font-size-sm);">${tradeDate}</div>
-                                                </td>
-                                                <td style="padding: var(--space-3);">
-                                                    <div style="font-weight: 600; color: var(--primary-blue);">${trade.stock_symbol}</div>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: center;">
-                                                    <span class="badge ${isBuy ? 'badge-success' : 'badge-danger'}" style="text-transform: uppercase;">
-                                                        ${trade.transaction_type}
-                                                    </span>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: right;">
-                                                    <div>${this.formatNumber(trade.quantity)}</div>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: right;">
-                                                    <div>$${this.formatNumber(trade.price)}</div>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: right;">
-                                                    <div style="font-weight: 600; color: ${isBuy ? 'var(--danger-red)' : 'var(--success-green)'};">
-                                                        ${isBuy ? '-' : '+'}$${this.formatNumber(total)}
-                                                    </div>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: right;">
-                                                    <div style="color: var(--gray-600);">$${this.formatNumber(trade.fees || 0)}</div>
-                                                </td>
-                                                <td style="padding: var(--space-3); text-align: right;">
-                                                    <div class="flex gap-2 justify-end">
-                                                        <button data-action="edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
-                                                        <button data-action="delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        `;
-                                    }).join('')}
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <div class="mt-4 pt-4" style="border-top: 1px solid var(--gray-200);">
-                            <div class="grid grid-cols-3 gap-4 text-center">
-                                <div>
-                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--success-green);">
-                                        ${transactions.filter(t => t.transaction_type === 'buy').length}
-                                    </div>
-                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Buy Trades</div>
+                <!-- Main Content -->
+                <main class="py-8">
+                    <div class="container">
+                        <!-- Filters and Search -->
+                        <div class="card mb-6">
+                            <div class="grid grid-cols-4 gap-4">
+                                <div class="form-group">
+                                    <label class="form-label">Search Symbol</label>
+                                    <input type="text" id="symbol-filter" class="form-input" placeholder="e.g., AAPL, MO">
                                 </div>
-                                <div>
-                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--danger-red);">
-                                        ${transactions.filter(t => t.transaction_type === 'sell').length}
-                                    </div>
-                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Sell Trades</div>
+                                <div class="form-group">
+                                    <label class="form-label">Transaction Type</label>
+                                    <select id="type-filter" class="form-input">
+                                        <option value="">All Types</option>
+                                        <option value="buy">Buy</option>
+                                        <option value="sell">Sell</option>
+                                        <option value="dividend">Dividend</option>
+                                    </select>
                                 </div>
-                                <div>
-                                    <div style="font-size: var(--font-size-lg); font-weight: 600; color: var(--gray-800);">
-                                        ${transactions.length}
-                                    </div>
-                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Total Trades</div>
+                                <div class="form-group">
+                                    <label class="form-label">Date Range</label>
+                                    <select id="date-filter" class="form-input">
+                                        <option value="">All Time</option>
+                                        <option value="7">Last 7 days</option>
+                                        <option value="30">Last 30 days</option>
+                                        <option value="90">Last 3 months</option>
+                                        <option value="365">Last year</option>
+                                    </select>
+                                </div>
+                                <div class="form-group">
+                                    <label class="form-label">Sort By</label>
+                                    <select id="sort-filter" class="form-input">
+                                        <option value="date-desc">Date (Newest)</option>
+                                        <option value="date-asc">Date (Oldest)</option>
+                                        <option value="symbol-asc">Symbol (A-Z)</option>
+                                        <option value="amount-desc">Amount (High-Low)</option>
+                                        <option value="amount-asc">Amount (Low-High)</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
-                    `}
-                </div>
+
+                        <!-- Summary Stats -->
+                        <div class="grid grid-cols-4 gap-6 mb-6">
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--gray-800);">
+                                    ${transactions.length}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Total Trades</div>
+                            </div>
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--success-green);">
+                                    ${transactions.filter(t => t.transaction_type === 'buy').length}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Buy Orders</div>
+                            </div>
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--danger-red);">
+                                    ${transactions.filter(t => t.transaction_type === 'sell').length}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Sell Orders</div>
+                            </div>
+                            <div class="card text-center">
+                                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--primary-blue);">
+                                    $${this.calculateTotalTradeValue(transactions).toLocaleString()}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Total Volume</div>
+                            </div>
+                        </div>
+
+                        <!-- Trades Table -->
+                        <div class="card">
+                            ${transactions.length === 0 ? `
+                                <div class="text-center py-12">
+                                    <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">📈</div>
+                                    <h3>No Trades Yet</h3>
+                                    <p class="text-muted mb-6">Start by recording your first buy or sell trade.</p>
+                                    <button data-action="show-add-trade" data-portfolio-id="${portfolioId}" class="btn btn-primary">Record First Trade</button>
+                                </div>
+                            ` : `
+                                <div class="flex justify-between items-center mb-4">
+                                    <h4 style="margin-bottom: 0;">All Transactions</h4>
+                                    <div class="text-muted" style="font-size: var(--font-size-sm);">
+                                        Showing ${transactions.length} transactions
+                                    </div>
+                                </div>
+
+                                <div class="table-responsive">
+                                    <table class="table" id="trades-table">
+                                        <thead>
+                                            <tr>
+                                                <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Date</th>
+                                                <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Symbol</th>
+                                                <th style="text-align: left; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Type</th>
+                                                <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Quantity</th>
+                                                <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Price</th>
+                                                <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Total</th>
+                                                <th style="text-align: right; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Fees</th>
+                                                <th style="text-align: center; padding: var(--space-3); font-weight: 600; color: var(--gray-700);">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            ${this.renderTradeRows(transactions)}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            `}
+                        </div>
+                    </div>
+                </main>
             </div>
         `;
+    }
+
+    calculateTotalTradeValue(transactions) {
+        return transactions.reduce((total, trade) => {
+            return total + (trade.quantity * trade.price);
+        }, 0);
+    }
+
+    renderTradeRows(transactions) {
+        return transactions.map(trade => {
+            const total = trade.quantity * trade.price;
+            const tradeDate = new Date(trade.transaction_date).toLocaleDateString();
+            const isBuy = trade.transaction_type === 'buy';
+
+            return `
+                <tr style="border-bottom: 1px solid var(--gray-100);">
+                    <td style="padding: var(--space-3);">
+                        <div style="font-size: var(--font-size-sm);">${tradeDate}</div>
+                    </td>
+                    <td style="padding: var(--space-3);">
+                        <button data-action="show-stock-detail" data-symbol="${trade.stock_symbol}" class="btn-link" style="font-weight: 600; color: var(--primary-blue);">
+                            ${trade.stock_symbol}
+                        </button>
+                    </td>
+                    <td style="padding: var(--space-3);">
+                        <span class="badge ${isBuy ? 'badge-success' : 'badge-danger'}" style="text-transform: uppercase;">
+                            ${trade.transaction_type}
+                        </span>
+                    </td>
+                    <td style="padding: var(--space-3); text-align: right;">
+                        <div>${this.formatNumber(trade.quantity)}</div>
+                    </td>
+                    <td style="padding: var(--space-3); text-align: right;">
+                        <div>$${this.formatNumber(trade.price)}</div>
+                    </td>
+                    <td style="padding: var(--space-3); text-align: right;">
+                        <div style="font-weight: 600; color: ${isBuy ? 'var(--danger-red)' : 'var(--success-green)'};">
+                            ${isBuy ? '-' : '+'}$${this.formatNumber(total)}
+                        </div>
+                    </td>
+                    <td style="padding: var(--space-3); text-align: right;">
+                        <div style="color: var(--gray-600);">$${this.formatNumber(trade.fees || 0)}</div>
+                    </td>
+                    <td style="padding: var(--space-3); text-align: center;">
+                        <div class="flex gap-2 justify-center">
+                            <button data-action="show-edit-trade" data-trade-id="${trade.id}" class="btn btn-secondary btn-sm" title="Edit Trade">✏️</button>
+                            <button data-action="confirm-delete-trade" data-trade-id="${trade.id}" class="btn btn-danger btn-sm" title="Delete Trade">🗑️</button>
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }).join('');
     }
 
     getStockDetailModalHTML(stockData) {
