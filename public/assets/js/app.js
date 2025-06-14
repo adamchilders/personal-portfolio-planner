@@ -130,6 +130,9 @@ class PortfolioApp {
             case 'confirm-delete-trade':
                 this.deleteTrade(element.dataset.tradeId, this.getCurrentPortfolioId());
                 break;
+            case 'backfill-historical-data':
+                this.backfillHistoricalData();
+                break;
             case 'confirm-delete-holding':
                 this.deleteHolding(element.dataset.symbol, this.getCurrentPortfolioId());
                 break;
@@ -621,6 +624,64 @@ class PortfolioApp {
         } catch (error) {
             this.showError('Failed to load stock information');
             console.error('Stock detail error:', error);
+        }
+    }
+
+    async backfillHistoricalData() {
+        try {
+            this.showLoading('Checking for stocks missing historical data...');
+
+            // First, check what stocks are missing data
+            const missingDataResponse = await this.apiCall('/stocks/missing-historical-data');
+
+            if (missingDataResponse.stocks_missing_data === 0) {
+                this.showSuccess('All stocks already have sufficient historical data!');
+                return;
+            }
+
+            const stocksToBackfill = missingDataResponse.stocks;
+            const stockSymbols = stocksToBackfill.map(s => s.symbol).join(', ');
+
+            // Show confirmation
+            const confirmed = confirm(
+                `Found ${missingDataResponse.stocks_missing_data} stocks missing historical data:\n\n` +
+                `${stockSymbols}\n\n` +
+                `This will fetch 1 year of historical price data from Yahoo Finance.\n` +
+                `This may take a few minutes. Continue?`
+            );
+
+            if (!confirmed) {
+                this.showDashboard();
+                return;
+            }
+
+            this.showLoading('Fetching historical data... This may take a few minutes.');
+
+            // Trigger the backfill
+            const backfillResponse = await this.apiCall('/stocks/backfill-historical-data', 'POST');
+
+            // Show results
+            const successCount = backfillResponse.successful;
+            const totalCount = backfillResponse.stocks_processed;
+            const failedCount = backfillResponse.failed;
+
+            let message = `Historical data backfill completed!\n\n`;
+            message += `✅ Successfully processed: ${successCount} stocks\n`;
+            if (failedCount > 0) {
+                message += `❌ Failed: ${failedCount} stocks\n`;
+            }
+            message += `\nYour portfolio charts should now show accurate values.`;
+
+            this.showSuccess(message);
+
+            // Refresh the current view to show updated data
+            setTimeout(() => {
+                this.showDashboard();
+            }, 3000);
+
+        } catch (error) {
+            this.showError('Failed to backfill historical data: ' + error.message);
+            console.error('Backfill error:', error);
         }
     }
 
@@ -1896,6 +1957,9 @@ class PortfolioApp {
                             <div class="flex gap-4">
                                 <button data-action="refresh-portfolio" data-portfolio-id="${portfolio.id}" class="btn btn-secondary" title="Refresh stock prices">
                                     🔄 Refresh
+                                </button>
+                                <button data-action="backfill-historical-data" class="btn btn-secondary" title="Fix missing historical data for portfolio charts">
+                                    📊 Fix Charts
                                 </button>
                                 <button data-action="show-add-trade" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Trade</button>
                                 <button data-action="show-trade-history" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">📈 Trade History</button>
