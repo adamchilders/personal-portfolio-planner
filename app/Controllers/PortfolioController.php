@@ -203,6 +203,48 @@ class PortfolioController
     }
     
     /**
+     * Get transactions for a portfolio
+     */
+    public function getTransactions(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $transactions = $portfolio->transactions()
+                ->orderBy('transaction_date', 'desc')
+                ->orderBy('created_at', 'desc')
+                ->get();
+
+            $transactionsData = $transactions->map(function ($transaction) {
+                return [
+                    'id' => $transaction->id,
+                    'stock_symbol' => $transaction->stock_symbol,
+                    'transaction_type' => $transaction->transaction_type,
+                    'quantity' => $transaction->quantity,
+                    'price' => $transaction->price,
+                    'fees' => $transaction->fees,
+                    'total_amount' => $transaction->getTotalAmount(),
+                    'transaction_date' => $transaction->transaction_date->toDateString(),
+                    'notes' => $transaction->notes,
+                    'created_at' => $transaction->created_at->toISOString()
+                ];
+            });
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $transactionsData,
+                'total_transactions' => $transactions->count()
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 404);
+        }
+    }
+
+    /**
      * Add a transaction to a portfolio - handles both POST and GET for development compatibility
      */
     public function addTransaction(Request $request, Response $response, array $args): Response

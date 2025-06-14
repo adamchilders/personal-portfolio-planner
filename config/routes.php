@@ -106,6 +106,7 @@ $app->group('/api/portfolios', function ($group) {
 
     // Portfolio holdings and transactions
     $group->post('/{id:[0-9]+}/holdings', [PortfolioController::class, 'addHolding']);
+    $group->get('/{id:[0-9]+}/transactions', [PortfolioController::class, 'getTransactions']);
     $group->post('/{id:[0-9]+}/transactions', [PortfolioController::class, 'addTransaction']);
 
     // Portfolio historical data
@@ -211,6 +212,7 @@ $app->group('/api', function ($group) {
                     'PUT /api/portfolios/{id}' => 'Update portfolio',
                     'DELETE /api/portfolios/{id}' => 'Delete portfolio',
                     'POST /api/portfolios/{id}/holdings' => 'Add holding to portfolio',
+                    'GET /api/portfolios/{id}/transactions' => 'Get portfolio transactions',
                     'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio'
                 ],
                 'Stocks' => [
