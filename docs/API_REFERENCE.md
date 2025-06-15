@@ -680,6 +680,106 @@ All API responses follow this format:
 }
 ```
 
+### POST /api/portfolios/{id}/dividend-payments/bulk
+**Purpose**: Process multiple dividend payments at once
+**Authentication**: Required
+**Request Body**:
+```json
+{
+  "payments": [
+    {
+      "dividend_id": 23,
+      "payment_date": "2025-05-15",
+      "shares_owned": 100,
+      "total_dividend_amount": 26.00,
+      "payment_type": "cash",
+      "notes": "Bulk processed dividend"
+    },
+    {
+      "dividend_id": 24,
+      "payment_date": "2025-06-15",
+      "shares_owned": 50,
+      "total_dividend_amount": 71.13,
+      "payment_type": "drip",
+      "drip_shares_purchased": 0.543,
+      "drip_price_per_share": 130.85,
+      "notes": "Bulk DRIP processing"
+    }
+  ]
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Bulk processing completed: 2/2 payments processed successfully",
+  "summary": {
+    "total_processed": 2,
+    "successful": 2,
+    "failed": 0,
+    "results": [
+      {
+        "success": true,
+        "dividend_id": 23,
+        "stock_symbol": "AAPL",
+        "payment_id": 5,
+        "amount": 26.00
+      },
+      {
+        "success": true,
+        "dividend_id": 24,
+        "stock_symbol": "PEP",
+        "payment_id": 6,
+        "amount": 71.13
+      }
+    ]
+  }
+}
+```
+
+### GET /api/portfolios/{id}/dividend-payments/analytics
+**Purpose**: Get comprehensive dividend analytics for a portfolio
+**Authentication**: Required
+**Response**:
+```json
+{
+  "success": true,
+  "portfolio_id": 2,
+  "portfolio_name": "My Portfolio",
+  "analytics": {
+    "total_dividends_received": 314.93,
+    "annual_dividend_income": 314.93,
+    "dividend_yield": 2.45,
+    "payment_count": 4,
+    "top_dividend_stocks": [
+      {
+        "symbol": "MO",
+        "name": "Altria Group, Inc.",
+        "total_dividends": 204.00,
+        "payment_count": 1,
+        "last_payment": "2025-04-15"
+      }
+    ],
+    "monthly_breakdown": [
+      {
+        "month": "Apr 2025",
+        "amount": 204.00
+      },
+      {
+        "month": "May 2025",
+        "amount": 26.00
+      }
+    ],
+    "drip_vs_cash": {
+      "drip": 204.00,
+      "cash": 110.93,
+      "drip_percentage": 64.8
+    }
+  }
+}
+```
+
 ### PUT /api/portfolios/{id}/dividend-payments/{paymentId}
 **Purpose**: Update dividend payment notes
 **Authentication**: Required

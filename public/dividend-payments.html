@@ -295,6 +295,15 @@
             async init() {
                 this.setupEventListeners();
                 await this.loadPortfolios();
+
+                // Check for portfolio parameter in URL
+                const urlParams = new URLSearchParams(window.location.search);
+                const portfolioId = urlParams.get('portfolio');
+                if (portfolioId) {
+                    const select = document.getElementById('portfolioSelect');
+                    select.value = portfolioId;
+                    await this.selectPortfolio(parseInt(portfolioId));
+                }
             }
 
             setupEventListeners() {

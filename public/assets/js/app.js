@@ -136,6 +136,15 @@ class PortfolioApp {
             case 'confirm-delete-holding':
                 this.deleteHolding(element.dataset.symbol, this.getCurrentPortfolioId());
                 break;
+            case 'show-dividend-payments':
+                this.showDividendPayments(element.dataset.portfolioId);
+                break;
+            case 'record-dividend-payment':
+                this.showRecordDividendModal(element.dataset.dividendId);
+                break;
+            case 'switch-dividend-tab':
+                this.switchDividendTab(element.dataset.tab);
+                break;
         }
     }
     
@@ -1079,6 +1088,7 @@ class PortfolioApp {
             // Initialize charts after DOM is ready
             setTimeout(() => {
                 this.initializePortfolioCharts(portfolio);
+                this.loadDividendSummary(portfolio.portfolio.id);
             }, 100);
         } catch (error) {
             this.showError('Failed to load portfolio details');
@@ -1691,7 +1701,6 @@ class PortfolioApp {
                                 <p class="text-muted" style="margin-bottom: 0;">Welcome back, ${this.currentUser?.username || 'Investor'}!</p>
                             </div>
                             <div class="flex gap-4">
-                                <a href="/dividend-payments.html" class="btn btn-outline">💰 Dividend Payments</a>
                                 <button data-action="show-create-portfolio" class="btn btn-primary">+ New Portfolio</button>
                                 <button data-action="logout" class="btn btn-secondary">Sign Out</button>
                             </div>
@@ -2290,6 +2299,9 @@ class PortfolioApp {
                         </div>
                     </div>
                 </section>
+
+                <!-- Dividend Payments Section -->
+                ${holdings.length > 0 ? this.getDividendPaymentsHTML(portfolio.id) : ''}
             </div>
         `;
     }
@@ -2563,6 +2575,49 @@ class PortfolioApp {
         });
 
         return totalValue > 0 ? (totalDividends / totalValue) * 100 : 0;
+    }
+
+    getDividendPaymentsHTML(portfolioId) {
+        return `
+            <section class="py-8" style="background: white;">
+                <div class="container">
+                    <div class="card">
+                        <div class="flex justify-between items-center mb-6">
+                            <h3 style="margin-bottom: 0;">💰 Dividend Payments</h3>
+                            <button data-action="show-dividend-payments" data-portfolio-id="${portfolioId}" class="btn btn-primary">
+                                Manage Dividends
+                            </button>
+                        </div>
+
+                        <!-- Dividend Summary Cards -->
+                        <div id="dividend-summary-${portfolioId}" class="grid grid-cols-3 gap-4 mb-6">
+                            <div class="card text-center" style="background: var(--gray-50);">
+                                <div class="loading-spinner" style="margin: 0 auto;"></div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600); margin-top: var(--space-2);">Loading...</div>
+                            </div>
+                            <div class="card text-center" style="background: var(--gray-50);">
+                                <div class="loading-spinner" style="margin: 0 auto;"></div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600); margin-top: var(--space-2);">Loading...</div>
+                            </div>
+                            <div class="card text-center" style="background: var(--gray-50);">
+                                <div class="loading-spinner" style="margin: 0 auto;"></div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600); margin-top: var(--space-2);">Loading...</div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="flex gap-4">
+                            <button data-action="show-dividend-payments" data-portfolio-id="${portfolioId}" class="btn btn-outline">
+                                📋 View All Payments
+                            </button>
+                            <button data-action="show-dividend-payments" data-portfolio-id="${portfolioId}" class="btn btn-outline">
+                                📊 Analytics & Insights
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        `;
     }
 
     getTradeHistoryPageHTML(portfolio, transactions, portfolioId) {
@@ -2873,6 +2928,84 @@ class PortfolioApp {
                 </div>
             </div>
         `;
+    }
+
+    async loadDividendSummary(portfolioId) {
+        try {
+            const [pendingResponse, analyticsResponse] = await Promise.all([
+                this.apiCall(`/portfolios/${portfolioId}/dividend-payments/pending`),
+                this.apiCall(`/portfolios/${portfolioId}/dividend-payments/analytics`)
+            ]);
+
+            const pending = pendingResponse.pending_payments || [];
+            const analytics = analyticsResponse.analytics || {};
+
+            this.renderDividendSummary(portfolioId, pending, analytics);
+        } catch (error) {
+            console.error('Failed to load dividend summary:', error);
+            this.renderDividendSummaryError(portfolioId);
+        }
+    }
+
+    renderDividendSummary(portfolioId, pendingPayments, analytics) {
+        const container = document.getElementById(`dividend-summary-${portfolioId}`);
+        if (!container) return;
+
+        const pendingTotal = pendingPayments.reduce((sum, payment) => sum + payment.total_dividend_amount, 0);
+
+        container.innerHTML = `
+            <div class="card text-center">
+                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--warning-orange); margin-bottom: var(--space-2);">
+                    ${pendingPayments.length}
+                </div>
+                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Pending Payments</div>
+                <div style="font-size: var(--font-size-xs); color: var(--gray-500); margin-top: var(--space-1);">
+                    $${pendingTotal.toFixed(2)} total
+                </div>
+            </div>
+
+            <div class="card text-center">
+                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--success-green); margin-bottom: var(--space-2);">
+                    $${(analytics.annual_dividend_income || 0).toFixed(0)}
+                </div>
+                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Annual Income</div>
+                <div style="font-size: var(--font-size-xs); color: var(--gray-500); margin-top: var(--space-1);">
+                    ${analytics.payment_count || 0} payments
+                </div>
+            </div>
+
+            <div class="card text-center">
+                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--primary-blue); margin-bottom: var(--space-2);">
+                    ${(analytics.dividend_yield || 0).toFixed(1)}%
+                </div>
+                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Portfolio Yield</div>
+                <div style="font-size: var(--font-size-xs); color: var(--gray-500); margin-top: var(--space-1);">
+                    ${analytics.drip_vs_cash ? analytics.drip_vs_cash.drip_percentage.toFixed(0) + '% DRIP' : 'No data'}
+                </div>
+            </div>
+        `;
+    }
+
+    renderDividendSummaryError(portfolioId) {
+        const container = document.getElementById(`dividend-summary-${portfolioId}`);
+        if (!container) return;
+
+        container.innerHTML = `
+            <div class="card text-center" style="grid-column: span 3;">
+                <div style="color: var(--gray-500); margin-bottom: var(--space-2);">
+                    Unable to load dividend data
+                </div>
+                <button data-action="show-dividend-payments" data-portfolio-id="${portfolioId}" class="btn btn-secondary btn-sm">
+                    Try Again
+                </button>
+            </div>
+        `;
+    }
+
+    showDividendPayments(portfolioId) {
+        // Navigate to the dividend payments interface
+        // For now, we'll use the existing separate page, but this could be enhanced to be a modal or inline view
+        window.location.href = `/dividend-payments.html?portfolio=${portfolioId}`;
     }
 }
 
