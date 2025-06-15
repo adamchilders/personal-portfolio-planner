@@ -112,6 +112,13 @@ $app->group('/api/portfolios', function ($group) {
     $group->put('/{id:[0-9]+}/transactions/{transactionId:[0-9]+}', [PortfolioController::class, 'updateTransaction']);
     $group->delete('/{id:[0-9]+}/transactions/{transactionId:[0-9]+}', [PortfolioController::class, 'deleteTransaction']);
 
+    // Dividend payments
+    $group->get('/{id:[0-9]+}/dividend-payments/pending', [\App\Controllers\DividendPaymentController::class, 'getPendingPayments']);
+    $group->post('/{id:[0-9]+}/dividend-payments', [\App\Controllers\DividendPaymentController::class, 'recordPayment']);
+    $group->get('/{id:[0-9]+}/dividend-payments', [\App\Controllers\DividendPaymentController::class, 'getPaymentHistory']);
+    $group->put('/{id:[0-9]+}/dividend-payments/{paymentId:[0-9]+}', [\App\Controllers\DividendPaymentController::class, 'updatePayment']);
+    $group->delete('/{id:[0-9]+}/dividend-payments/{paymentId:[0-9]+}', [\App\Controllers\DividendPaymentController::class, 'deletePayment']);
+
     // Portfolio historical data
     $group->get('/{id:[0-9]+}/performance', [PortfolioController::class, 'getHistoricalPerformance']);
     $group->get('/{id:[0-9]+}/stocks/performance', [PortfolioController::class, 'getStockPerformance']);

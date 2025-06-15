@@ -1691,6 +1691,7 @@ class PortfolioApp {
                                 <p class="text-muted" style="margin-bottom: 0;">Welcome back, ${this.currentUser?.username || 'Investor'}!</p>
                             </div>
                             <div class="flex gap-4">
+                                <a href="/dividend-payments.html" class="btn btn-outline">💰 Dividend Payments</a>
                                 <button data-action="show-create-portfolio" class="btn btn-primary">+ New Portfolio</button>
                                 <button data-action="logout" class="btn btn-secondary">Sign Out</button>
                             </div>

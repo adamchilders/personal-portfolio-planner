@@ -1,0 +1,636 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dividend Payments - Portfolio Tracker</title>
+    <link rel="stylesheet" href="/assets/css/styles.css">
+    <style>
+        .dividend-card {
+            border: 1px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            padding: var(--space-4);
+            margin-bottom: var(--space-4);
+            background: white;
+        }
+        
+        .dividend-card.pending {
+            border-left: 4px solid var(--warning-orange);
+        }
+        
+        .dividend-card.recorded {
+            border-left: 4px solid var(--success-green);
+        }
+        
+        .payment-type-selector {
+            display: flex;
+            gap: var(--space-2);
+            margin: var(--space-3) 0;
+        }
+        
+        .payment-type-option {
+            flex: 1;
+            padding: var(--space-3);
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius-md);
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        
+        .payment-type-option:hover {
+            border-color: var(--primary-blue);
+        }
+        
+        .payment-type-option.selected {
+            border-color: var(--primary-blue);
+            background: var(--primary-blue-light);
+        }
+        
+        .drip-fields {
+            display: none;
+            margin-top: var(--space-3);
+            padding: var(--space-3);
+            background: var(--gray-50);
+            border-radius: var(--radius-md);
+        }
+        
+        .drip-fields.show {
+            display: block;
+        }
+        
+        .dividend-summary {
+            background: var(--gray-50);
+            padding: var(--space-3);
+            border-radius: var(--radius-md);
+            margin-bottom: var(--space-4);
+        }
+        
+        .tabs {
+            display: flex;
+            border-bottom: 1px solid var(--gray-200);
+            margin-bottom: var(--space-4);
+        }
+        
+        .tab {
+            padding: var(--space-3) var(--space-4);
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            transition: all 0.2s ease;
+        }
+        
+        .tab:hover {
+            background: var(--gray-50);
+        }
+        
+        .tab.active {
+            border-bottom-color: var(--primary-blue);
+            color: var(--primary-blue);
+            font-weight: 600;
+        }
+        
+        .tab-content {
+            display: none;
+        }
+        
+        .tab-content.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header class="header">
+            <div class="header-content">
+                <h1>Dividend Payments</h1>
+                <div class="header-actions">
+                    <select id="portfolioSelect" class="form-control">
+                        <option value="">Select Portfolio...</option>
+                    </select>
+                    <a href="/" class="btn btn-secondary">Back to Dashboard</a>
+                </div>
+            </div>
+        </header>
+
+        <main id="main-content">
+            <div class="loading-state" id="loading">
+                <div class="loading-spinner"></div>
+                <p>Loading dividend payments...</p>
+            </div>
+
+            <div id="content" style="display: none;">
+                <div class="tabs">
+                    <div class="tab active" data-tab="pending">Pending Payments</div>
+                    <div class="tab" data-tab="history">Payment History</div>
+                </div>
+
+                <!-- Pending Payments Tab -->
+                <div id="pending-tab" class="tab-content active">
+                    <div class="dividend-summary" id="pending-summary" style="display: none;">
+                        <h3>Pending Dividend Payments</h3>
+                        <p id="pending-count">0 pending payments</p>
+                        <p id="pending-total">Total: $0.00</p>
+                    </div>
+
+                    <div id="pending-payments"></div>
+                    
+                    <div id="no-pending" style="display: none;">
+                        <div class="text-center py-8">
+                            <div class="text-muted">No pending dividend payments found</div>
+                            <p class="text-sm text-muted mt-2">
+                                Dividend payments will appear here when stocks in your portfolio have recent dividend payments that haven't been recorded yet.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Payment History Tab -->
+                <div id="history-tab" class="tab-content">
+                    <div class="dividend-summary" id="history-summary" style="display: none;">
+                        <h3>Payment History</h3>
+                        <p id="history-count">0 recorded payments</p>
+                        <p id="history-total">Total: $0.00</p>
+                    </div>
+
+                    <div id="payment-history"></div>
+                    
+                    <div id="no-history" style="display: none;">
+                        <div class="text-center py-8">
+                            <div class="text-muted">No dividend payments recorded yet</div>
+                            <p class="text-sm text-muted mt-2">
+                                Once you record dividend payments, they will appear here.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Record Payment Modal -->
+    <div id="recordPaymentModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Record Dividend Payment</h3>
+                <button class="modal-close" data-action="close-modal">&times;</button>
+            </div>
+            <div class="modal-body">
+                <form id="recordPaymentForm">
+                    <div class="form-group">
+                        <label>Stock</label>
+                        <input type="text" id="modal-stock" readonly class="form-control">
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label>Ex-Date</label>
+                            <input type="text" id="modal-ex-date" readonly class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Payment Date</label>
+                            <input type="date" id="modal-payment-date" required class="form-control">
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="form-group">
+                            <label>Shares Owned</label>
+                            <input type="number" id="modal-shares-owned" step="0.000001" required class="form-control">
+                        </div>
+                        <div class="form-group">
+                            <label>Dividend per Share</label>
+                            <input type="number" id="modal-dividend-per-share" step="0.000001" readonly class="form-control">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Total Dividend Amount</label>
+                        <input type="number" id="modal-total-amount" step="0.01" required class="form-control">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Payment Type</label>
+                        <div class="payment-type-selector">
+                            <div class="payment-type-option selected" data-type="cash">
+                                <strong>Cash</strong>
+                                <div class="text-sm text-muted">Reduce cost basis</div>
+                            </div>
+                            <div class="payment-type-option" data-type="drip">
+                                <strong>DRIP</strong>
+                                <div class="text-sm text-muted">Reinvest in shares</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="drip-fields" id="drip-fields">
+                        <div class="grid grid-cols-2 gap-4">
+                            <div class="form-group">
+                                <label>Shares Purchased</label>
+                                <input type="number" id="modal-drip-shares" step="0.000001" class="form-control">
+                            </div>
+                            <div class="form-group">
+                                <label>Price per Share</label>
+                                <input type="number" id="modal-drip-price" step="0.01" class="form-control">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>Notes (Optional)</label>
+                        <textarea id="modal-notes" class="form-control" rows="3"></textarea>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-action="close-modal">Cancel</button>
+                <button type="button" class="btn btn-primary" id="record-payment-btn">Record Payment</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/assets/js/auth.js"></script>
+    <script>
+        class DividendPaymentsApp {
+            constructor() {
+                this.authToken = localStorage.getItem('auth_token');
+                this.currentPortfolio = null;
+                this.pendingPayments = [];
+                this.paymentHistory = [];
+
+                if (!this.authToken) {
+                    window.location.href = '/login.html';
+                    return;
+                }
+
+                this.init();
+            }
+
+            async init() {
+                this.setupEventListeners();
+                await this.loadPortfolios();
+            }
+
+            setupEventListeners() {
+                // Portfolio selection
+                document.getElementById('portfolioSelect').addEventListener('change', (e) => {
+                    if (e.target.value) {
+                        this.selectPortfolio(parseInt(e.target.value));
+                    }
+                });
+
+                // Tab switching
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.addEventListener('click', (e) => {
+                        this.switchTab(e.target.dataset.tab);
+                    });
+                });
+
+                // Payment type selection
+                document.querySelectorAll('.payment-type-option').forEach(option => {
+                    option.addEventListener('click', (e) => {
+                        this.selectPaymentType(e.currentTarget.dataset.type);
+                    });
+                });
+
+                // Modal controls
+                document.querySelectorAll('[data-action="close-modal"]').forEach(btn => {
+                    btn.addEventListener('click', () => this.closeModal());
+                });
+
+                // Record payment button
+                document.getElementById('record-payment-btn').addEventListener('click', () => {
+                    this.recordPayment();
+                });
+
+                // Auto-calculate total amount
+                document.getElementById('modal-shares-owned').addEventListener('input', () => {
+                    this.calculateTotalAmount();
+                });
+
+                // Auto-calculate DRIP shares
+                document.getElementById('modal-drip-price').addEventListener('input', () => {
+                    this.calculateDripShares();
+                });
+            }
+
+            async loadPortfolios() {
+                try {
+                    const response = await this.apiCall('/portfolios');
+                    const portfolios = response.portfolios || [];
+
+                    const select = document.getElementById('portfolioSelect');
+                    select.innerHTML = '<option value="">Select Portfolio...</option>';
+
+                    portfolios.forEach(portfolio => {
+                        const option = document.createElement('option');
+                        option.value = portfolio.id;
+                        option.textContent = portfolio.name;
+                        select.appendChild(option);
+                    });
+
+                    if (portfolios.length === 1) {
+                        select.value = portfolios[0].id;
+                        this.selectPortfolio(portfolios[0].id);
+                    }
+                } catch (error) {
+                    this.showError('Failed to load portfolios: ' + error.message);
+                }
+            }
+
+            async selectPortfolio(portfolioId) {
+                this.currentPortfolio = portfolioId;
+                document.getElementById('loading').style.display = 'block';
+                document.getElementById('content').style.display = 'none';
+
+                try {
+                    await Promise.all([
+                        this.loadPendingPayments(),
+                        this.loadPaymentHistory()
+                    ]);
+
+                    document.getElementById('loading').style.display = 'none';
+                    document.getElementById('content').style.display = 'block';
+                } catch (error) {
+                    this.showError('Failed to load dividend data: ' + error.message);
+                }
+            }
+
+            async loadPendingPayments() {
+                const response = await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments/pending`);
+                this.pendingPayments = response.pending_payments || [];
+                this.renderPendingPayments();
+            }
+
+            async loadPaymentHistory() {
+                const response = await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments`);
+                this.paymentHistory = response.payments || [];
+                this.renderPaymentHistory();
+            }
+
+            renderPendingPayments() {
+                const container = document.getElementById('pending-payments');
+                const summary = document.getElementById('pending-summary');
+                const noData = document.getElementById('no-pending');
+
+                if (this.pendingPayments.length === 0) {
+                    container.innerHTML = '';
+                    summary.style.display = 'none';
+                    noData.style.display = 'block';
+                    return;
+                }
+
+                const totalAmount = this.pendingPayments.reduce((sum, payment) => sum + payment.total_dividend_amount, 0);
+
+                // Update summary
+                document.getElementById('pending-count').textContent = `${this.pendingPayments.length} pending payments`;
+                document.getElementById('pending-total').textContent = `Total: $${totalAmount.toFixed(2)}`;
+                summary.style.display = 'block';
+                noData.style.display = 'none';
+
+                // Render payments
+                container.innerHTML = this.pendingPayments.map(payment => `
+                    <div class="dividend-card pending">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 style="margin: 0; font-size: var(--font-size-lg);">${payment.stock_symbol}</h4>
+                                <p style="margin: 0; color: var(--gray-600);">${payment.stock_name}</p>
+                            </div>
+                            <div class="text-right">
+                                <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--success-green);">
+                                    $${payment.total_dividend_amount.toFixed(2)}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">
+                                    ${payment.shares_owned} shares × $${payment.dividend_per_share.toFixed(4)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-3">
+                            <div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">Ex-Date</div>
+                                <div>${new Date(payment.ex_date).toLocaleDateString()}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">Payment Date</div>
+                                <div>${payment.payment_date ? new Date(payment.payment_date).toLocaleDateString() : 'TBD'}</div>
+                            </div>
+                        </div>
+
+                        <div class="flex justify-end">
+                            <button class="btn btn-primary btn-sm" onclick="dividendApp.showRecordModal(${JSON.stringify(payment).replace(/"/g, '&quot;')})">
+                                Record Payment
+                            </button>
+                        </div>
+                    </div>
+                `).join('');
+            }
+
+            renderPaymentHistory() {
+                const container = document.getElementById('payment-history');
+                const summary = document.getElementById('history-summary');
+                const noData = document.getElementById('no-history');
+
+                if (this.paymentHistory.length === 0) {
+                    container.innerHTML = '';
+                    summary.style.display = 'none';
+                    noData.style.display = 'block';
+                    return;
+                }
+
+                const totalAmount = this.paymentHistory.reduce((sum, payment) => sum + payment.total_amount, 0);
+
+                // Update summary
+                document.getElementById('history-count').textContent = `${this.paymentHistory.length} recorded payments`;
+                document.getElementById('history-total').textContent = `Total: $${totalAmount.toFixed(2)}`;
+                summary.style.display = 'block';
+                noData.style.display = 'none';
+
+                // Render payments
+                container.innerHTML = this.paymentHistory.map(payment => `
+                    <div class="dividend-card recorded">
+                        <div class="flex justify-between items-start mb-3">
+                            <div>
+                                <h4 style="margin: 0; font-size: var(--font-size-lg);">${payment.stock_symbol}</h4>
+                                <p style="margin: 0; color: var(--gray-600);">${payment.stock_name}</p>
+                            </div>
+                            <div class="text-right">
+                                <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--success-green);">
+                                    $${payment.total_amount.toFixed(2)}
+                                </div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">
+                                    ${payment.shares_owned} shares × $${payment.dividend_per_share.toFixed(4)}
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-3 gap-4 mb-3">
+                            <div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">Payment Date</div>
+                                <div>${new Date(payment.payment_date).toLocaleDateString()}</div>
+                            </div>
+                            <div>
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-500);">Type</div>
+                                <div class="capitalize">${payment.payment_type}</div>
+                            </div>
+                            ${payment.payment_type === 'drip' ? `
+                                <div>
+                                    <div style="font-size: var(--font-size-sm); color: var(--gray-500);">DRIP Shares</div>
+                                    <div>${payment.drip_shares_purchased} @ $${payment.drip_price_per_share.toFixed(2)}</div>
+                                </div>
+                            ` : '<div></div>'}
+                        </div>
+
+                        ${payment.notes ? `
+                            <div style="margin-top: var(--space-2); padding: var(--space-2); background: var(--gray-50); border-radius: var(--radius-sm);">
+                                <div style="font-size: var(--font-size-sm); color: var(--gray-600);">${payment.notes}</div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `).join('');
+            }
+
+            switchTab(tabName) {
+                // Update tab buttons
+                document.querySelectorAll('.tab').forEach(tab => {
+                    tab.classList.toggle('active', tab.dataset.tab === tabName);
+                });
+
+                // Update tab content
+                document.querySelectorAll('.tab-content').forEach(content => {
+                    content.classList.toggle('active', content.id === `${tabName}-tab`);
+                });
+            }
+
+            showRecordModal(payment) {
+                document.getElementById('modal-stock').value = `${payment.stock_symbol} - ${payment.stock_name}`;
+                document.getElementById('modal-ex-date').value = new Date(payment.ex_date).toLocaleDateString();
+                document.getElementById('modal-payment-date').value = payment.payment_date || '';
+                document.getElementById('modal-shares-owned').value = payment.shares_owned;
+                document.getElementById('modal-dividend-per-share').value = payment.dividend_per_share;
+                document.getElementById('modal-total-amount').value = payment.total_dividend_amount.toFixed(2);
+
+                // Set current stock price as default DRIP price
+                if (payment.current_stock_price) {
+                    document.getElementById('modal-drip-price').value = payment.current_stock_price.toFixed(2);
+                }
+
+                // Store payment data for submission
+                this.currentPaymentData = payment;
+
+                // Reset form
+                this.selectPaymentType('cash');
+                document.getElementById('modal-notes').value = '';
+
+                document.getElementById('recordPaymentModal').style.display = 'flex';
+            }
+
+            selectPaymentType(type) {
+                document.querySelectorAll('.payment-type-option').forEach(option => {
+                    option.classList.toggle('selected', option.dataset.type === type);
+                });
+
+                const dripFields = document.getElementById('drip-fields');
+                if (type === 'drip') {
+                    dripFields.classList.add('show');
+                    this.calculateDripShares();
+                } else {
+                    dripFields.classList.remove('show');
+                }
+            }
+
+            calculateTotalAmount() {
+                const shares = parseFloat(document.getElementById('modal-shares-owned').value) || 0;
+                const dividendPerShare = parseFloat(document.getElementById('modal-dividend-per-share').value) || 0;
+                const total = shares * dividendPerShare;
+                document.getElementById('modal-total-amount').value = total.toFixed(2);
+
+                this.calculateDripShares();
+            }
+
+            calculateDripShares() {
+                const totalAmount = parseFloat(document.getElementById('modal-total-amount').value) || 0;
+                const dripPrice = parseFloat(document.getElementById('modal-drip-price').value) || 0;
+
+                if (totalAmount > 0 && dripPrice > 0) {
+                    const dripShares = totalAmount / dripPrice;
+                    document.getElementById('modal-drip-shares').value = dripShares.toFixed(6);
+                }
+            }
+
+            async recordPayment() {
+                try {
+                    const paymentType = document.querySelector('.payment-type-option.selected').dataset.type;
+
+                    const paymentData = {
+                        dividend_id: this.currentPaymentData.dividend_id,
+                        payment_date: document.getElementById('modal-payment-date').value,
+                        shares_owned: parseFloat(document.getElementById('modal-shares-owned').value),
+                        total_dividend_amount: parseFloat(document.getElementById('modal-total-amount').value),
+                        payment_type: paymentType,
+                        notes: document.getElementById('modal-notes').value
+                    };
+
+                    if (paymentType === 'drip') {
+                        paymentData.drip_shares_purchased = parseFloat(document.getElementById('modal-drip-shares').value);
+                        paymentData.drip_price_per_share = parseFloat(document.getElementById('modal-drip-price').value);
+                    }
+
+                    await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments`, 'POST', paymentData);
+
+                    this.closeModal();
+                    this.showSuccess('Dividend payment recorded successfully!');
+
+                    // Reload data
+                    await this.loadPendingPayments();
+                    await this.loadPaymentHistory();
+
+                } catch (error) {
+                    this.showError('Failed to record payment: ' + error.message);
+                }
+            }
+
+            closeModal() {
+                document.getElementById('recordPaymentModal').style.display = 'none';
+            }
+
+            async apiCall(endpoint, method = 'GET', data = null) {
+                const config = {
+                    method,
+                    headers: {
+                        'Authorization': 'Bearer ' + this.authToken,
+                        'Content-Type': 'application/json'
+                    }
+                };
+
+                if (data) {
+                    config.body = JSON.stringify(data);
+                }
+
+                const response = await fetch('/api' + endpoint, config);
+                const result = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(result.error || 'Request failed');
+                }
+
+                return result;
+            }
+
+            showSuccess(message) {
+                // Simple alert for now - could be enhanced with toast notifications
+                alert('Success: ' + message);
+            }
+
+            showError(message) {
+                // Simple alert for now - could be enhanced with toast notifications
+                alert('Error: ' + message);
+            }
+        }
+
+        // Initialize the app
+        document.addEventListener('DOMContentLoaded', () => {
+            window.dividendApp = new DividendPaymentsApp();
+        });
+    </script>
+</body>
+</html>
