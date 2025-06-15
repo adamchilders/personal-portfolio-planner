@@ -2850,18 +2850,14 @@ class PortfolioApp {
                                                 ${dividend.payment_date ? `
                                                     <div>
                                                         <div style="font-weight: 500; color: var(--gray-700);">${new Date(dividend.payment_date).toLocaleDateString()}</div>
-                                                        <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Payment Date*</div>
+                                                        <div style="font-size: var(--font-size-xs); color: var(--gray-500);">Payment Date</div>
                                                     </div>
                                                 ` : ''}
                                             </div>
                                         </div>
                                     `).join('')}
                                 </div>
-                                <div style="margin-top: var(--space-2); padding: var(--space-2); background: var(--gray-50); border-radius: var(--radius-sm);">
-                                    <div style="font-size: var(--font-size-xs); color: var(--gray-600);">
-                                        * Payment dates are estimated based on typical patterns (3 weeks after ex-date)
-                                    </div>
-                                </div>
+
                             </div>
                         ` : ''}
                     ` : `

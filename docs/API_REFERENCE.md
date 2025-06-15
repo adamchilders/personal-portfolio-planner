@@ -443,12 +443,8 @@ All API responses follow this format:
 }
 ```
 
-**Note**: Payment dates and record dates are estimated based on typical patterns:
-- Record date: 1 business day after ex-date
-- Payment date: 3 weeks after ex-date (adjusted for weekends)
-
 ### POST /api/stocks/{symbol}/dividends/update
-**Purpose**: Fetch and update dividend data from Yahoo Finance
+**Purpose**: Fetch and update dividend data from configured provider (FMP primary, Yahoo Finance fallback)
 **Authentication**: Required
 **Query Parameters**:
 - `days` (optional): Number of days to fetch (default: 365, max: 1825)
@@ -472,8 +468,6 @@ All API responses follow this format:
   ]
 }
 ```
-
-**Note**: This endpoint fetches ex-dates and amounts from Yahoo Finance, then calculates estimated payment and record dates.
 
 ### POST /api/stocks/{symbol}/update-quote
 **Purpose**: Force update stock quote from external API

@@ -584,31 +584,11 @@ class StockDataService
             foreach ($result['events']['dividends'] as $timestamp => $dividendData) {
                 $exDate = new \DateTime(date('Y-m-d', $timestamp));
 
-                // Calculate estimated record date (1 business day after ex-date)
-                $recordDate = clone $exDate;
-                $recordDate->modify('+1 day');
-                // Skip weekends
-                if ($recordDate->format('N') == 6) { // Saturday
-                    $recordDate->modify('+2 days');
-                } elseif ($recordDate->format('N') == 7) { // Sunday
-                    $recordDate->modify('+1 day');
-                }
-
-                // Calculate estimated payment date (typically 2-3 weeks after ex-date)
-                $paymentDate = clone $exDate;
-                $paymentDate->modify('+21 days'); // 3 weeks
-                // Skip weekends
-                if ($paymentDate->format('N') == 6) { // Saturday
-                    $paymentDate->modify('+2 days');
-                } elseif ($paymentDate->format('N') == 7) { // Sunday
-                    $paymentDate->modify('+1 day');
-                }
-
                 $dividends[] = [
                     'symbol' => $symbol,
                     'ex_date' => $exDate->format('Y-m-d'),
-                    'record_date' => $recordDate->format('Y-m-d'),
-                    'payment_date' => $paymentDate->format('Y-m-d'),
+                    'record_date' => null, // Yahoo Finance doesn't provide record dates
+                    'payment_date' => null, // Yahoo Finance doesn't provide payment dates
                     'amount' => (float)$dividendData['amount'],
                     'timestamp' => $timestamp
                 ];

@@ -211,7 +211,7 @@ GET /api/stocks/{symbol}/dividends
 # Get specific number of days
 GET /api/stocks/{symbol}/dividends?days=365
 
-# Update dividend data from Yahoo Finance
+# Update dividend data from configured provider (FMP primary, Yahoo Finance fallback)
 POST /api/stocks/{symbol}/dividends/update
 
 # Example response
