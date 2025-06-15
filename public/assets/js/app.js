@@ -1076,7 +1076,24 @@ class PortfolioApp {
         try {
             this.showLoading('Loading portfolio details...');
 
-            const portfolio = await this.apiCall(`/portfolios/${portfolioId}`);
+            // Check if this portfolio needs a refresh (e.g., after dividend payments)
+            const needsRefresh = this.portfolioNeedsRefresh && this.portfolioNeedsRefresh[portfolioId];
+
+            // Add cache-busting parameter if refresh is needed
+            const apiUrl = needsRefresh
+                ? `/portfolios/${portfolioId}?_refresh=${Date.now()}`
+                : `/portfolios/${portfolioId}`;
+
+            const portfolio = await this.apiCall(apiUrl);
+
+            // Clear the refresh flag and show notification if data was refreshed
+            if (needsRefresh && this.portfolioNeedsRefresh) {
+                delete this.portfolioNeedsRefresh[portfolioId];
+                // Show a subtle notification that data was refreshed
+                setTimeout(() => {
+                    this.showSuccess('Portfolio data refreshed with latest dividend payments');
+                }, 500);
+            }
 
             // Fetch dividend data for each holding
             if (portfolio.holdings && portfolio.holdings.length > 0) {
@@ -3602,6 +3619,9 @@ class PortfolioApp {
             // Reload the dividend payments page
             await this.showDividendPayments(this.currentDividendPortfolio);
 
+            // Clear any cached portfolio data so it refreshes when user goes back
+            this.clearPortfolioCache(this.currentDividendPortfolio);
+
         } catch (error) {
             this.showError('Failed to record payment: ' + error.message);
         }
@@ -3631,9 +3651,22 @@ class PortfolioApp {
             // Reload the dividend payments page
             await this.showDividendPayments(this.currentDividendPortfolio);
 
+            // Clear any cached portfolio data so it refreshes when user goes back
+            this.clearPortfolioCache(this.currentDividendPortfolio);
+
         } catch (error) {
             this.showError('Failed to process bulk payments: ' + error.message);
         }
+    }
+
+    clearPortfolioCache(portfolioId) {
+        // Clear any cached portfolio data
+        if (this.portfolioCache) {
+            delete this.portfolioCache[portfolioId];
+        }
+        // Force refresh flag for this portfolio
+        this.portfolioNeedsRefresh = this.portfolioNeedsRefresh || {};
+        this.portfolioNeedsRefresh[portfolioId] = true;
     }
 }
 
