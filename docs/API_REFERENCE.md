@@ -573,6 +573,123 @@ All API responses follow this format:
 
 ---
 
+## Dividend Payment Management
+
+### GET /api/portfolios/{id}/dividend-payments/pending
+**Purpose**: Get pending dividend payments for a portfolio
+**Authentication**: Required
+**Response**:
+```json
+{
+  "success": true,
+  "portfolio_id": 2,
+  "portfolio_name": "My Portfolio",
+  "pending_payments": [
+    {
+      "dividend_id": 23,
+      "stock_symbol": "AAPL",
+      "stock_name": "Apple Inc.",
+      "ex_date": "2025-05-12",
+      "payment_date": "2025-05-15",
+      "dividend_per_share": 0.26,
+      "shares_owned": 100,
+      "total_dividend_amount": 26.00,
+      "current_stock_price": 180.50
+    }
+  ],
+  "count": 1
+}
+```
+
+### POST /api/portfolios/{id}/dividend-payments
+**Purpose**: Record a dividend payment (cash or DRIP)
+**Authentication**: Required
+**Request Body (Cash Dividend)**:
+```json
+{
+  "dividend_id": 23,
+  "payment_date": "2025-05-15",
+  "shares_owned": 100,
+  "total_dividend_amount": 26.00,
+  "payment_type": "cash",
+  "notes": "Cash dividend payment"
+}
+```
+
+**Request Body (DRIP)**:
+```json
+{
+  "dividend_id": 23,
+  "payment_date": "2025-05-15",
+  "shares_owned": 100,
+  "total_dividend_amount": 26.00,
+  "payment_type": "drip",
+  "drip_shares_purchased": 0.144,
+  "drip_price_per_share": 180.50,
+  "notes": "DRIP reinvestment"
+}
+```
+
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Dividend payment recorded successfully",
+  "payment": {
+    "id": 1,
+    "stock_symbol": "AAPL",
+    "payment_type": "cash",
+    "total_amount": 26.00,
+    "payment_date": "2025-05-15",
+    "drip_shares": null
+  }
+}
+```
+
+### GET /api/portfolios/{id}/dividend-payments
+**Purpose**: Get dividend payment history for a portfolio
+**Authentication**: Required
+**Query Parameters**:
+- `symbol` (optional): Filter by stock symbol
+
+**Response**:
+```json
+{
+  "success": true,
+  "portfolio_id": 2,
+  "portfolio_name": "My Portfolio",
+  "payments": [
+    {
+      "id": 1,
+      "stock_symbol": "AAPL",
+      "stock_name": "Apple Inc.",
+      "payment_date": "2025-05-15",
+      "ex_date": "2025-05-12",
+      "shares_owned": 100,
+      "dividend_per_share": 0.26,
+      "total_amount": 26.00,
+      "payment_type": "cash",
+      "drip_shares_purchased": null,
+      "drip_price_per_share": null,
+      "notes": "Cash dividend payment",
+      "created_at": "2025-06-15T19:06:13.000000Z"
+    }
+  ],
+  "count": 1,
+  "total_dividends": 26.00
+}
+```
+
+### PUT /api/portfolios/{id}/dividend-payments/{paymentId}
+**Purpose**: Update dividend payment notes
+**Authentication**: Required
+
+### DELETE /api/portfolios/{id}/dividend-payments/{paymentId}
+**Purpose**: Delete a dividend payment record
+**Authentication**: Required
+
+---
+
 ## System Endpoints
 
 ### GET /api/status

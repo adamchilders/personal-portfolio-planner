@@ -115,6 +115,8 @@ $app->group('/api/portfolios', function ($group) {
     // Dividend payments
     $group->get('/{id:[0-9]+}/dividend-payments/pending', [\App\Controllers\DividendPaymentController::class, 'getPendingPayments']);
     $group->post('/{id:[0-9]+}/dividend-payments', [\App\Controllers\DividendPaymentController::class, 'recordPayment']);
+    $group->post('/{id:[0-9]+}/dividend-payments/bulk', [\App\Controllers\DividendPaymentController::class, 'processBulkPayments']);
+    $group->get('/{id:[0-9]+}/dividend-payments/analytics', [\App\Controllers\DividendPaymentController::class, 'getDividendAnalytics']);
     $group->get('/{id:[0-9]+}/dividend-payments', [\App\Controllers\DividendPaymentController::class, 'getPaymentHistory']);
     $group->put('/{id:[0-9]+}/dividend-payments/{paymentId:[0-9]+}', [\App\Controllers\DividendPaymentController::class, 'updatePayment']);
     $group->delete('/{id:[0-9]+}/dividend-payments/{paymentId:[0-9]+}', [\App\Controllers\DividendPaymentController::class, 'deletePayment']);

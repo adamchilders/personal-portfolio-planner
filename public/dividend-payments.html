@@ -122,14 +122,24 @@
                 <div class="tabs">
                     <div class="tab active" data-tab="pending">Pending Payments</div>
                     <div class="tab" data-tab="history">Payment History</div>
+                    <div class="tab" data-tab="analytics">Analytics</div>
                 </div>
 
                 <!-- Pending Payments Tab -->
                 <div id="pending-tab" class="tab-content active">
                     <div class="dividend-summary" id="pending-summary" style="display: none;">
-                        <h3>Pending Dividend Payments</h3>
-                        <p id="pending-count">0 pending payments</p>
-                        <p id="pending-total">Total: $0.00</p>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <h3>Pending Dividend Payments</h3>
+                                <p id="pending-count">0 pending payments</p>
+                                <p id="pending-total">Total: $0.00</p>
+                            </div>
+                            <div>
+                                <button id="process-all-btn" class="btn btn-primary" style="display: none;">
+                                    Process All as Cash
+                                </button>
+                            </div>
+                        </div>
                     </div>
 
                     <div id="pending-payments"></div>
@@ -153,12 +163,28 @@
                     </div>
 
                     <div id="payment-history"></div>
-                    
+
                     <div id="no-history" style="display: none;">
                         <div class="text-center py-8">
                             <div class="text-muted">No dividend payments recorded yet</div>
                             <p class="text-sm text-muted mt-2">
                                 Once you record dividend payments, they will appear here.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div id="analytics-tab" class="tab-content">
+                    <div id="analytics-content">
+                        <!-- Analytics content will be loaded here -->
+                    </div>
+
+                    <div id="no-analytics" style="display: none;">
+                        <div class="text-center py-8">
+                            <div class="text-muted">No dividend data available for analytics</div>
+                            <p class="text-sm text-muted mt-2">
+                                Record some dividend payments to see analytics and insights.
                             </p>
                         </div>
                     </div>
@@ -256,6 +282,7 @@
                 this.currentPortfolio = null;
                 this.pendingPayments = [];
                 this.paymentHistory = [];
+                this.analytics = null;
 
                 if (!this.authToken) {
                     window.location.href = '/login.html';
@@ -302,6 +329,11 @@
                     this.recordPayment();
                 });
 
+                // Process all button
+                document.getElementById('process-all-btn').addEventListener('click', () => {
+                    this.processAllPayments();
+                });
+
                 // Auto-calculate total amount
                 document.getElementById('modal-shares-owned').addEventListener('input', () => {
                     this.calculateTotalAmount();
@@ -345,7 +377,8 @@
                 try {
                     await Promise.all([
                         this.loadPendingPayments(),
-                        this.loadPaymentHistory()
+                        this.loadPaymentHistory(),
+                        this.loadAnalytics()
                     ]);
 
                     document.getElementById('loading').style.display = 'none';
@@ -367,6 +400,12 @@
                 this.renderPaymentHistory();
             }
 
+            async loadAnalytics() {
+                const response = await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments/analytics`);
+                this.analytics = response.analytics || null;
+                this.renderAnalytics();
+            }
+
             renderPendingPayments() {
                 const container = document.getElementById('pending-payments');
                 const summary = document.getElementById('pending-summary');
@@ -386,6 +425,10 @@
                 document.getElementById('pending-total').textContent = `Total: $${totalAmount.toFixed(2)}`;
                 summary.style.display = 'block';
                 noData.style.display = 'none';
+
+                // Show/hide process all button
+                const processAllBtn = document.getElementById('process-all-btn');
+                processAllBtn.style.display = this.pendingPayments.length > 1 ? 'block' : 'none';
 
                 // Render payments
                 container.innerHTML = this.pendingPayments.map(payment => `
@@ -586,6 +629,134 @@
 
                 } catch (error) {
                     this.showError('Failed to record payment: ' + error.message);
+                }
+            }
+
+            renderAnalytics() {
+                const container = document.getElementById('analytics-content');
+                const noData = document.getElementById('no-analytics');
+
+                if (!this.analytics || this.analytics.payment_count === 0) {
+                    container.innerHTML = '';
+                    noData.style.display = 'block';
+                    return;
+                }
+
+                noData.style.display = 'none';
+
+                const analytics = this.analytics;
+
+                container.innerHTML = `
+                    <!-- Overview Cards -->
+                    <div class="grid grid-cols-4 gap-4 mb-6">
+                        <div class="card text-center">
+                            <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--success-green); margin-bottom: var(--space-2);">
+                                $${analytics.total_dividends_received.toFixed(2)}
+                            </div>
+                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Total Dividends</div>
+                        </div>
+
+                        <div class="card text-center">
+                            <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--primary-blue); margin-bottom: var(--space-2);">
+                                $${analytics.annual_dividend_income.toFixed(2)}
+                            </div>
+                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Annual Income</div>
+                        </div>
+
+                        <div class="card text-center">
+                            <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--warning-orange); margin-bottom: var(--space-2);">
+                                ${analytics.dividend_yield}%
+                            </div>
+                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Portfolio Yield</div>
+                        </div>
+
+                        <div class="card text-center">
+                            <div style="font-size: var(--font-size-2xl); font-weight: 600; color: var(--gray-700); margin-bottom: var(--space-2);">
+                                ${analytics.payment_count}
+                            </div>
+                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Payments</div>
+                        </div>
+                    </div>
+
+                    <!-- DRIP vs Cash -->
+                    <div class="grid grid-cols-2 gap-6 mb-6">
+                        <div class="card">
+                            <h4 class="mb-4">Payment Type Distribution</h4>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center">
+                                    <span>DRIP Reinvestment</span>
+                                    <span class="font-weight-600">$${analytics.drip_vs_cash.drip.toFixed(2)} (${analytics.drip_vs_cash.drip_percentage}%)</span>
+                                </div>
+                                <div class="flex justify-between items-center">
+                                    <span>Cash Payments</span>
+                                    <span class="font-weight-600">$${analytics.drip_vs_cash.cash.toFixed(2)} (${(100 - analytics.drip_vs_cash.drip_percentage).toFixed(1)}%)</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <h4 class="mb-4">Top Dividend Stocks</h4>
+                            <div class="space-y-2">
+                                ${analytics.top_dividend_stocks.slice(0, 5).map(stock => `
+                                    <div class="flex justify-between items-center">
+                                        <div>
+                                            <span class="font-weight-600">${stock.symbol}</span>
+                                            <span class="text-muted text-sm">${stock.payment_count} payments</span>
+                                        </div>
+                                        <span class="font-weight-600">$${stock.total_dividends.toFixed(2)}</span>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Monthly Breakdown -->
+                    <div class="card">
+                        <h4 class="mb-4">Monthly Dividend Income (Last 12 Months)</h4>
+                        <div class="grid grid-cols-6 gap-2">
+                            ${analytics.monthly_breakdown.map(month => `
+                                <div class="text-center">
+                                    <div style="font-size: var(--font-size-sm); color: var(--gray-600); margin-bottom: var(--space-1);">
+                                        ${month.month}
+                                    </div>
+                                    <div style="font-weight: 600; color: ${month.amount > 0 ? 'var(--success-green)' : 'var(--gray-400)'};">
+                                        $${month.amount.toFixed(0)}
+                                    </div>
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                `;
+            }
+
+            async processAllPayments() {
+                if (!confirm(`Process all ${this.pendingPayments.length} pending payments as cash dividends?`)) {
+                    return;
+                }
+
+                try {
+                    const payments = this.pendingPayments.map(payment => ({
+                        dividend_id: payment.dividend_id,
+                        payment_date: payment.payment_date || new Date().toISOString().split('T')[0],
+                        shares_owned: payment.shares_owned,
+                        total_dividend_amount: payment.total_dividend_amount,
+                        payment_type: 'cash',
+                        notes: 'Bulk processed as cash dividend'
+                    }));
+
+                    const response = await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments/bulk`, 'POST', {
+                        payments: payments
+                    });
+
+                    this.showSuccess(`Bulk processing completed: ${response.summary.successful}/${response.summary.total_processed} payments processed successfully`);
+
+                    // Reload data
+                    await this.loadPendingPayments();
+                    await this.loadPaymentHistory();
+                    await this.loadAnalytics();
+
+                } catch (error) {
+                    this.showError('Failed to process bulk payments: ' + error.message);
                 }
             }
 

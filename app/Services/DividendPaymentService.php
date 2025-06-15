@@ -131,6 +131,45 @@ class DividendPaymentService
         
         return $dividendPayment;
     }
+
+    /**
+     * Process multiple dividend payments at once
+     */
+    public function processBulkDividendPayments(Portfolio $portfolio, array $paymentsData): array
+    {
+        $results = [];
+        $successful = 0;
+        $failed = 0;
+
+        foreach ($paymentsData as $paymentData) {
+            try {
+                $dividendPayment = $this->recordDividendPayment($portfolio, $paymentData);
+                $results[] = [
+                    'success' => true,
+                    'dividend_id' => $paymentData['dividend_id'],
+                    'stock_symbol' => $dividendPayment->stock_symbol,
+                    'payment_id' => $dividendPayment->id,
+                    'amount' => $dividendPayment->total_dividend_amount
+                ];
+                $successful++;
+            } catch (Exception $e) {
+                $results[] = [
+                    'success' => false,
+                    'dividend_id' => $paymentData['dividend_id'] ?? null,
+                    'stock_symbol' => $paymentData['stock_symbol'] ?? 'unknown',
+                    'error' => $e->getMessage()
+                ];
+                $failed++;
+            }
+        }
+
+        return [
+            'total_processed' => count($paymentsData),
+            'successful' => $successful,
+            'failed' => $failed,
+            'results' => $results
+        ];
+    }
     
     /**
      * Update portfolio holdings based on dividend payment type
@@ -209,13 +248,127 @@ class DividendPaymentService
     }
     
     /**
-     * Get shares owned on a specific date
+     * Get shares owned on a specific date based on transaction history
      */
     private function getSharesOwnedOnDate(PortfolioHolding $holding, string $date): float
     {
-        // For now, return current quantity
-        // TODO: Implement historical calculation based on transaction history
-        return (float)$holding->quantity;
+        // Get all transactions for this stock up to the given date
+        $transactions = Transaction::where('portfolio_id', $holding->portfolio_id)
+            ->where('stock_symbol', $holding->stock_symbol)
+            ->where('transaction_date', '<=', $date)
+            ->orderBy('transaction_date', 'asc')
+            ->get();
+
+        $totalShares = 0.0;
+
+        foreach ($transactions as $transaction) {
+            switch ($transaction->transaction_type) {
+                case 'buy':
+                case 'transfer_in':
+                    $totalShares += (float)$transaction->quantity;
+                    break;
+
+                case 'sell':
+                case 'transfer_out':
+                    $totalShares -= (float)$transaction->quantity;
+                    break;
+
+                case 'split':
+                    // For stock splits, multiply by the split ratio
+                    // The price field contains the split ratio (e.g., 2.0 for 2:1 split)
+                    $totalShares *= (float)$transaction->price;
+                    break;
+
+                case 'dividend':
+                    // Dividend transactions don't affect share count
+                    // (unless it's a DRIP, which would be recorded as a separate buy transaction)
+                    break;
+            }
+        }
+
+        return max(0.0, $totalShares);
+    }
+
+    /**
+     * Get dividend analytics for a portfolio
+     */
+    public function getDividendAnalytics(Portfolio $portfolio): array
+    {
+        // Get all dividend payments for this portfolio
+        $payments = DividendPayment::where('portfolio_id', $portfolio->id)
+            ->with(['dividend', 'stock'])
+            ->orderBy('payment_date', 'desc')
+            ->get();
+
+        if ($payments->isEmpty()) {
+            return [
+                'total_dividends_received' => 0,
+                'annual_dividend_income' => 0,
+                'dividend_yield' => 0,
+                'payment_count' => 0,
+                'top_dividend_stocks' => [],
+                'monthly_breakdown' => [],
+                'drip_vs_cash' => ['drip' => 0, 'cash' => 0]
+            ];
+        }
+
+        $totalDividends = $payments->sum('total_dividend_amount');
+        $paymentCount = $payments->count();
+
+        // Calculate annual dividend income (last 12 months)
+        $oneYearAgo = DateTimeHelper::now()->modify('-1 year')->format('Y-m-d');
+        $annualDividends = $payments->where('payment_date', '>=', $oneYearAgo)
+            ->sum('total_dividend_amount');
+
+        // Calculate portfolio dividend yield
+        $portfolioValue = $portfolio->total_value ?? 0;
+        $dividendYield = $portfolioValue > 0 ? ($annualDividends / $portfolioValue) * 100 : 0;
+
+        // Top dividend paying stocks
+        $stockDividends = $payments->groupBy('stock_symbol')->map(function ($stockPayments) {
+            return [
+                'symbol' => $stockPayments->first()->stock_symbol,
+                'name' => $stockPayments->first()->stock->name ?? $stockPayments->first()->stock_symbol,
+                'total_dividends' => $stockPayments->sum('total_dividend_amount'),
+                'payment_count' => $stockPayments->count(),
+                'last_payment' => $stockPayments->max('payment_date')
+            ];
+        })->sortByDesc('total_dividends')->take(10)->values();
+
+        // Monthly breakdown (last 12 months)
+        $monthlyBreakdown = [];
+        for ($i = 11; $i >= 0; $i--) {
+            $month = DateTimeHelper::now()->modify("-{$i} months");
+            $monthKey = $month->format('Y-m');
+            $monthName = $month->format('M Y');
+
+            $monthlyAmount = $payments->filter(function ($payment) use ($monthKey) {
+                return $payment->payment_date->format('Y-m') === $monthKey;
+            })->sum('total_dividend_amount');
+
+            $monthlyBreakdown[] = [
+                'month' => $monthName,
+                'amount' => $monthlyAmount
+            ];
+        }
+
+        // DRIP vs Cash breakdown
+        $dripAmount = $payments->where('payment_type', 'drip')->sum('total_dividend_amount');
+        $cashAmount = $payments->where('payment_type', 'cash')->sum('total_dividend_amount');
+
+        return [
+            'total_dividends_received' => $totalDividends,
+            'annual_dividend_income' => $annualDividends,
+            'dividend_yield' => round($dividendYield, 2),
+            'payment_count' => $paymentCount,
+            'top_dividend_stocks' => $stockDividends,
+            'monthly_breakdown' => $monthlyBreakdown,
+            'drip_vs_cash' => [
+                'drip' => $dripAmount,
+                'cash' => $cashAmount,
+                'drip_percentage' => $totalDividends > 0 ? round(($dripAmount / $totalDividends) * 100, 1) : 0
+            ]
+        ];
     }
     
     /**

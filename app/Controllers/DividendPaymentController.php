@@ -80,6 +80,66 @@ class DividendPaymentController extends BaseController
             return $this->errorResponse($response, $e->getMessage(), 400);
         }
     }
+
+    /**
+     * Process multiple dividend payments at once
+     */
+    public function processBulkPayments(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $data = $request->getParsedBody();
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+
+            if (!isset($data['payments']) || !is_array($data['payments'])) {
+                return $this->errorResponse($response, 'Payments array is required', 400);
+            }
+
+            // Validate each payment
+            foreach ($data['payments'] as $index => $paymentData) {
+                try {
+                    $this->validatePaymentData($paymentData);
+                } catch (\Exception $e) {
+                    return $this->errorResponse($response, "Payment {$index}: " . $e->getMessage(), 400);
+                }
+            }
+
+            $results = $this->dividendPaymentService->processBulkDividendPayments($portfolio, $data['payments']);
+
+            return $this->successResponse($response, [
+                'message' => "Bulk processing completed: {$results['successful']}/{$results['total_processed']} payments processed successfully",
+                'summary' => $results
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * Get dividend analytics for a portfolio
+     */
+    public function getDividendAnalytics(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $analytics = $this->dividendPaymentService->getDividendAnalytics($portfolio);
+
+            return $this->successResponse($response, [
+                'portfolio_id' => $portfolio->id,
+                'portfolio_name' => $portfolio->name,
+                'analytics' => $analytics
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 404);
+        }
+    }
     
     /**
      * Get dividend payment history for a portfolio
