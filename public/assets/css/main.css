@@ -827,3 +827,151 @@ canvas {
         font-size: var(--font-size-xl);
     }
 }
+
+/* Dividend Payments Styles */
+.tabs-container {
+    border-bottom: 1px solid var(--gray-200);
+    margin-bottom: var(--space-6);
+}
+
+.tabs {
+    display: flex;
+    gap: 0;
+}
+
+.tab {
+    padding: var(--space-3) var(--space-4);
+    background: none;
+    border: none;
+    border-bottom: 2px solid transparent;
+    color: var(--gray-600);
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.tab:hover {
+    color: var(--primary-blue);
+    background: var(--gray-50);
+}
+
+.tab.active {
+    color: var(--primary-blue);
+    border-bottom-color: var(--primary-blue);
+    background: white;
+}
+
+.tab-content-container {
+    min-height: 400px;
+}
+
+.tab-content {
+    display: none;
+}
+
+.tab-content.active {
+    display: block;
+}
+
+/* Payment Type Selector */
+.payment-type-selector {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--space-3);
+    margin-top: var(--space-2);
+}
+
+.payment-type-option {
+    padding: var(--space-4);
+    border: 2px solid var(--gray-200);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    text-align: center;
+}
+
+.payment-type-option:hover {
+    border-color: var(--primary-blue);
+    background: var(--gray-50);
+}
+
+.payment-type-option.selected {
+    border-color: var(--primary-blue);
+    background: var(--primary-blue-light);
+    color: white;
+}
+
+.payment-type-title {
+    font-weight: 600;
+    margin-bottom: var(--space-1);
+}
+
+.payment-type-description {
+    font-size: var(--font-size-sm);
+    color: var(--gray-600);
+}
+
+.payment-type-option.selected .payment-type-description {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+/* DRIP Fields */
+.drip-fields {
+    display: none;
+    margin-top: var(--space-4);
+    padding: var(--space-4);
+    background: var(--gray-50);
+    border-radius: var(--radius-md);
+    border: 1px solid var(--gray-200);
+}
+
+.drip-fields.show {
+    display: block;
+}
+
+/* Modal Enhancements */
+.modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: var(--space-4);
+}
+
+/* Additional Badge Styles */
+.badge-primary {
+    background: var(--primary-blue-light);
+    color: white;
+}
+
+/* Text Utilities */
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+.text-left { text-align: left; }
+
+.font-weight-600 { font-weight: 600; }
+
+.capitalize { text-transform: capitalize; }
+
+/* Spacing Utilities */
+.space-y-2 > * + * { margin-top: var(--space-2); }
+.space-y-3 > * + * { margin-top: var(--space-3); }
+
+.ml-6 { margin-left: var(--space-6); }
+
+.flex-1 { flex: 1; }
+
+/* Color Variables for Light Backgrounds */
+:root {
+    --primary-blue-light: rgba(37, 99, 235, 0.1);
+    --success-green-light: rgba(16, 185, 129, 0.1);
+    --danger-red-light: rgba(239, 68, 68, 0.1);
+    --warning-orange: #f59e0b;
+    --warning-orange-light: rgba(245, 158, 11, 0.1);
+}
