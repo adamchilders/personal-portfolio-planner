@@ -5,13 +5,15 @@ declare(strict_types=1);
 namespace App\Controllers;
 
 use App\Services\PortfolioService;
+use App\Services\DividendSafetyService;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
 
 class PortfolioController
 {
     public function __construct(
-        private PortfolioService $portfolioService
+        private PortfolioService $portfolioService,
+        private DividendSafetyService $dividendSafetyService
     ) {}
     
     /**
@@ -535,6 +537,51 @@ class PortfolioController
             error_log("Stack trace: " . $e->getTraceAsString());
 
             return $this->errorResponse($response, $e->getMessage(), 500);
+        }
+    }
+
+    /**
+     * Get dividend safety analysis for a portfolio
+     */
+    public function getDividendSafety(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $safetyAnalysis = $this->dividendSafetyService->getPortfolioDividendSafety($portfolio);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $safetyAnalysis
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
+    /**
+     * Get dividend safety score for a specific stock
+     */
+    public function getStockDividendSafety(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol']);
+
+        try {
+            $safetyData = $this->dividendSafetyService->calculateDividendSafetyScore($symbol);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'symbol' => $symbol,
+                'data' => $safetyData
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
         }
     }
 

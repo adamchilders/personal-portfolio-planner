@@ -127,6 +127,9 @@ $app->group('/api/portfolios', function ($group) {
     $group->get('/{id:[0-9]+}/performance', [PortfolioController::class, 'getHistoricalPerformance']);
     $group->get('/{id:[0-9]+}/stocks/performance', [PortfolioController::class, 'getStockPerformance']);
     $group->get('/{id:[0-9]+}/events', [PortfolioController::class, 'getPortfolioEvents']);
+
+    // Dividend safety analysis
+    $group->get('/{id:[0-9]+}/dividend-safety', [PortfolioController::class, 'getDividendSafety']);
 })->add(AuthMiddleware::class);
 
 
@@ -223,7 +226,8 @@ $app->group('/api', function ($group) {
                     'POST /api/portfolios/{id}/transactions' => 'Add transaction to portfolio',
                     'GET /api/portfolios/{id}/transactions/{transactionId}' => 'Get specific transaction',
                     'PUT /api/portfolios/{id}/transactions/{transactionId}' => 'Update transaction',
-                    'DELETE /api/portfolios/{id}/transactions/{transactionId}' => 'Delete transaction'
+                    'DELETE /api/portfolios/{id}/transactions/{transactionId}' => 'Delete transaction',
+                    'GET /api/portfolios/{id}/dividend-safety' => 'Get portfolio dividend safety analysis'
                 ],
                 'Stocks' => [
                     'GET /api/stocks/search?q={query}' => 'Search for stocks',
@@ -235,7 +239,8 @@ $app->group('/api', function ($group) {
                     'POST /api/stocks/{symbol}/update-quote' => 'Update stock quote',
                     'POST /api/stocks/quotes' => 'Get multiple stock quotes',
                     'GET /api/stocks/missing-historical-data' => 'Get stocks missing historical data',
-                    'POST /api/stocks/backfill-historical-data' => 'Backfill historical data for stocks'
+                    'POST /api/stocks/backfill-historical-data' => 'Backfill historical data for stocks',
+                    'GET /api/stocks/{symbol}/dividend-safety' => 'Get dividend safety score for a stock'
                 ]
             ]
         ];
@@ -258,6 +263,7 @@ $app->group('/api/stocks', function ($group) {
     $group->post('/quotes', [StockController::class, 'multipleQuotes']);
     $group->get('/missing-historical-data', [StockController::class, 'getMissingHistoricalData']);
     $group->post('/backfill-historical-data', [StockController::class, 'backfillHistoricalData']);
+    $group->get('/{symbol:[A-Z0-9.-]+}/dividend-safety', [PortfolioController::class, 'getStockDividendSafety']);
 })->add(AuthMiddleware::class);
 
 // Admin routes group

@@ -145,6 +145,9 @@ class PortfolioApp {
             case 'show-dividend-payments':
                 this.showDividendPayments(element.dataset.portfolioId);
                 break;
+            case 'show-dividend-safety':
+                this.showDividendSafety(element.dataset.portfolioId);
+                break;
             case 'record-dividend-payment':
                 this.showRecordDividendModal(element.dataset.dividendId);
                 break;
@@ -2276,6 +2279,7 @@ class PortfolioApp {
                                 </button>
                                 <button data-action="show-add-trade" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Trade</button>
                                 <button data-action="show-trade-history" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">📈 Trade History</button>
+                                <button data-action="show-dividend-safety" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">🛡️ Dividend Safety</button>
                             </div>
                         </div>
                     </div>
@@ -3824,6 +3828,168 @@ class PortfolioApp {
         // Force refresh flag for this portfolio
         this.portfolioNeedsRefresh = this.portfolioNeedsRefresh || {};
         this.portfolioNeedsRefresh[portfolioId] = true;
+    }
+
+    /**
+     * Show dividend safety analysis for a portfolio
+     */
+    async showDividendSafety(portfolioId) {
+        try {
+            this.showLoading('Analyzing dividend safety...');
+
+            // Fetch dividend safety data
+            const response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
+
+            if (response.success) {
+                document.getElementById('app').innerHTML = this.getDividendSafetyHTML(response.data, portfolioId);
+            } else {
+                this.showError('Failed to load dividend safety analysis');
+            }
+
+        } catch (error) {
+            this.showError('Failed to load dividend safety analysis');
+            console.error('Dividend safety error:', error);
+        }
+    }
+
+    /**
+     * Generate dividend safety analysis HTML
+     */
+    getDividendSafetyHTML(analysis, portfolioId) {
+        const gradeColor = this.getGradeColor(analysis.overall_grade);
+        const riskPercentage = analysis.total_dividend_income > 0
+            ? ((analysis.at_risk_dividend_income / analysis.total_dividend_income) * 100).toFixed(1)
+            : 0;
+
+        return `
+            <div class="min-h-screen" style="background: var(--gray-50);">
+                <header class="bg-white border-bottom">
+                    <div class="container">
+                        <div class="flex justify-between items-center py-4">
+                            <div class="flex items-center gap-4">
+                                <button data-action="view-portfolio" data-portfolio-id="${portfolioId}" class="btn btn-secondary">
+                                    ← Back to Portfolio
+                                </button>
+                                <div>
+                                    <h2 style="margin-bottom: 0;">🛡️ Dividend Safety Analysis</h2>
+                                    <p class="text-muted" style="margin-bottom: 0;">Portfolio Risk Assessment</p>
+                                </div>
+                            </div>
+                            <div class="flex gap-4">
+                                <button data-action="logout" class="btn btn-secondary">Sign Out</button>
+                            </div>
+                        </div>
+                    </div>
+                </header>
+
+                <main class="py-8">
+                    <div class="container">
+                        <!-- Overall Score Card -->
+                        <div class="card mb-6">
+                            <div class="text-center">
+                                <div style="font-size: 4rem; font-weight: 700; color: ${gradeColor}; margin-bottom: var(--space-2);">
+                                    ${analysis.overall_score}
+                                </div>
+                                <div style="font-size: var(--font-size-2xl); font-weight: 600; color: ${gradeColor}; margin-bottom: var(--space-3);">
+                                    Grade: ${analysis.overall_grade}
+                                </div>
+                                <div class="grid grid-cols-3 gap-6">
+                                    <div>
+                                        <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--success-green);">
+                                            $${analysis.safe_dividend_income.toFixed(2)}
+                                        </div>
+                                        <div style="color: var(--gray-600);">Safe Dividend Income</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--error-red);">
+                                            $${analysis.at_risk_dividend_income.toFixed(2)}
+                                        </div>
+                                        <div style="color: var(--gray-600);">At-Risk Income (${riskPercentage}%)</div>
+                                    </div>
+                                    <div>
+                                        <div style="font-size: var(--font-size-xl); font-weight: 600; color: var(--primary-blue);">
+                                            $${analysis.total_dividend_income.toFixed(2)}
+                                        </div>
+                                        <div style="color: var(--gray-600);">Total Annual Income</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Risk Distribution -->
+                        <div class="grid grid-cols-2 gap-6 mb-6">
+                            <div class="card">
+                                <h4 class="mb-4">Risk Distribution</h4>
+                                <div class="space-y-3">
+                                    <div class="flex justify-between items-center">
+                                        <span class="flex items-center gap-2">
+                                            <div style="width: 12px; height: 12px; background: var(--success-green); border-radius: 50%;"></div>
+                                            Safe (Score 80+)
+                                        </span>
+                                        <span style="font-weight: 600;">${analysis.risk_distribution.safe} holdings</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="flex items-center gap-2">
+                                            <div style="width: 12px; height: 12px; background: var(--warning-orange); border-radius: 50%;"></div>
+                                            Moderate (Score 60-79)
+                                        </span>
+                                        <span style="font-weight: 600;">${analysis.risk_distribution.moderate} holdings</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="flex items-center gap-2">
+                                            <div style="width: 12px; height: 12px; background: var(--error-red); border-radius: 50%;"></div>
+                                            Risky (Score 40-59)
+                                        </span>
+                                        <span style="font-weight: 600;">${analysis.risk_distribution.risky} holdings</span>
+                                    </div>
+                                    <div class="flex justify-between items-center">
+                                        <span class="flex items-center gap-2">
+                                            <div style="width: 12px; height: 12px; background: var(--gray-700); border-radius: 50%;"></div>
+                                            Dangerous (Score <40)
+                                        </span>
+                                        <span style="font-weight: 600;">${analysis.risk_distribution.dangerous} holdings</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <h4 class="mb-4">Recommendations</h4>
+                                ${analysis.recommendations.length > 0 ? `
+                                    <div class="space-y-2">
+                                        ${analysis.recommendations.map(rec => `
+                                            <div class="flex items-start gap-2">
+                                                <div style="color: var(--warning-orange); margin-top: 2px;">⚠️</div>
+                                                <div style="font-size: var(--font-size-sm);">${rec}</div>
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                ` : `
+                                    <div class="text-center py-4">
+                                        <div style="color: var(--success-green); font-size: 2rem; margin-bottom: var(--space-2);">✅</div>
+                                        <div style="color: var(--gray-600);">Your dividend portfolio looks healthy!</div>
+                                    </div>
+                                `}
+                            </div>
+                        </div>
+                    </div>
+                </main>
+            </div>
+        `;
+    }
+
+    /**
+     * Get color for safety grade
+     */
+    getGradeColor(grade) {
+        switch (grade) {
+            case 'A+':
+            case 'A': return 'var(--success-green)';
+            case 'B': return 'var(--primary-blue)';
+            case 'C': return 'var(--warning-orange)';
+            case 'D':
+            case 'F': return 'var(--error-red)';
+            default: return 'var(--gray-500)';
+        }
     }
 }
 

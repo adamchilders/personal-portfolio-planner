@@ -83,6 +83,88 @@ class FinancialModelingPrepService
     }
     
     /**
+     * Fetch financial statements for dividend safety analysis
+     */
+    public function fetchFinancialStatements(string $symbol, int $years = 5): array
+    {
+        if (!$this->isAvailable()) {
+            throw new Exception('Financial Modeling Prep API is not available');
+        }
+
+        try {
+            $statements = [
+                'income_statements' => $this->fetchIncomeStatements($symbol, $years),
+                'balance_sheets' => $this->fetchBalanceSheets($symbol, $years),
+                'cash_flow_statements' => $this->fetchCashFlowStatements($symbol, $years),
+                'key_metrics' => $this->fetchKeyMetrics($symbol, $years)
+            ];
+
+            $this->log("Fetched financial statements for {$symbol}");
+            return $statements;
+
+        } catch (Exception $e) {
+            $this->log("Error fetching financial statements for {$symbol}: " . $e->getMessage());
+            throw $e;
+        }
+    }
+
+    /**
+     * Fetch income statements
+     */
+    public function fetchIncomeStatements(string $symbol, int $years = 5): array
+    {
+        $url = self::BASE_URL . '/income-statement/' . urlencode($symbol) .
+               '?period=annual&limit=' . $years . '&apikey=' . $this->apiKey->api_key;
+
+        $response = $this->makeHttpRequest($url);
+        $this->apiKey->recordUsage();
+
+        return json_decode($response, true) ?: [];
+    }
+
+    /**
+     * Fetch balance sheets
+     */
+    public function fetchBalanceSheets(string $symbol, int $years = 5): array
+    {
+        $url = self::BASE_URL . '/balance-sheet-statement/' . urlencode($symbol) .
+               '?period=annual&limit=' . $years . '&apikey=' . $this->apiKey->api_key;
+
+        $response = $this->makeHttpRequest($url);
+        $this->apiKey->recordUsage();
+
+        return json_decode($response, true) ?: [];
+    }
+
+    /**
+     * Fetch cash flow statements
+     */
+    public function fetchCashFlowStatements(string $symbol, int $years = 5): array
+    {
+        $url = self::BASE_URL . '/cash-flow-statement/' . urlencode($symbol) .
+               '?period=annual&limit=' . $years . '&apikey=' . $this->apiKey->api_key;
+
+        $response = $this->makeHttpRequest($url);
+        $this->apiKey->recordUsage();
+
+        return json_decode($response, true) ?: [];
+    }
+
+    /**
+     * Fetch key metrics
+     */
+    public function fetchKeyMetrics(string $symbol, int $years = 5): array
+    {
+        $url = self::BASE_URL . '/key-metrics/' . urlencode($symbol) .
+               '?period=annual&limit=' . $years . '&apikey=' . $this->apiKey->api_key;
+
+        $response = $this->makeHttpRequest($url);
+        $this->apiKey->recordUsage();
+
+        return json_decode($response, true) ?: [];
+    }
+
+    /**
      * Fetch upcoming dividend calendar from FMP
      */
     public function fetchDividendCalendar(string $fromDate, string $toDate): array
