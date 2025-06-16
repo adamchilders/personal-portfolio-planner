@@ -3324,10 +3324,10 @@ class PortfolioApp {
                                     ${new Date(payment.created_at).toLocaleDateString()}
                                 </div>
                                 <div class="flex gap-2 justify-end">
-                                    <button onclick="portfolioApp.editDividendPayment(${payment.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs);">
+                                    <button onclick="portfolioApp.editDividendPayment(${payment.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs);" ${!payment.id ? 'disabled' : ''}>
                                         ✏️ Edit
                                     </button>
-                                    <button onclick="portfolioApp.deleteDividendPayment(${payment.id}, '${payment.stock_symbol}')" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs); background: var(--error-red); color: white;">
+                                    <button onclick="portfolioApp.deleteDividendPayment(${payment.id}, '${payment.stock_symbol}')" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs); background: var(--error-red); color: white;" ${!payment.id ? 'disabled' : ''}>
                                         🗑️ Delete
                                     </button>
                                 </div>
@@ -3702,12 +3702,18 @@ class PortfolioApp {
 
     async editDividendPayment(paymentId) {
         try {
+            // Validate payment ID
+            if (!paymentId || paymentId <= 0) {
+                this.showError('Invalid payment ID');
+                return;
+            }
+
             // Get the payment details from the API
             const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments`);
             const payment = response.payments.find(p => p.id === paymentId);
 
             if (!payment) {
-                this.showError('Payment not found');
+                this.showError('Payment not found in current portfolio');
                 return;
             }
 

@@ -530,7 +530,11 @@ class PortfolioController
             return $response->withHeader('Content-Type', 'application/json');
 
         } catch (\Exception $e) {
-            return $this->errorResponse($response, $e->getMessage(), 400);
+            // Log the error for debugging
+            error_log("Portfolio Events Error: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+
+            return $this->errorResponse($response, $e->getMessage(), 500);
         }
     }
 

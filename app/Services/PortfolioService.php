@@ -286,8 +286,10 @@ class PortfolioService
             $dividendYield = $holding->stock?->getAnnualDividendYield() ?? 0;
             $annualDividends = 0;
             if ($holding->stock) {
+                $oneYearAgo = \App\Helpers\DateTimeHelper::now();
+                $oneYearAgo->modify('-1 year');
                 $annualDividends = $holding->stock->dividends()
-                    ->where('ex_date', '>=', \App\Helpers\DateTimeHelper::now()->modify('-1 year'))
+                    ->where('ex_date', '>=', $oneYearAgo->format('Y-m-d'))
                     ->where('dividend_type', 'regular')
                     ->sum('amount');
             }
@@ -621,7 +623,8 @@ class PortfolioService
      */
     public function getPortfolioEvents(Portfolio $portfolio, int $days = 60): array
     {
-        $startDate = \App\Helpers\DateTimeHelper::now()->modify("-{$days} days");
+        $startDate = \App\Helpers\DateTimeHelper::now();
+        $startDate->modify("-{$days} days");
         $events = [];
 
         // Get transactions within the date range
