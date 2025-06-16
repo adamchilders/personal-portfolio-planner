@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services;
 
+use App\Models\DividendPayment;
 use App\Models\Portfolio;
 use App\Models\PortfolioHolding;
 use App\Models\Transaction;
@@ -645,7 +646,7 @@ class PortfolioService
         }
 
         // Get dividend payments within the date range
-        $dividendPayments = \App\Models\DividendPayment::where('portfolio_id', $portfolio->id)
+        $dividendPayments = DividendPayment::where('portfolio_id', $portfolio->id)
             ->where('payment_date', '>=', $startDate->format('Y-m-d'))
             ->orderBy('payment_date', 'asc')
             ->get();
@@ -675,7 +676,7 @@ class PortfolioService
     /**
      * Generate description for transaction events
      */
-    private function getTransactionDescription(\App\Models\Transaction $transaction): string
+    private function getTransactionDescription(Transaction $transaction): string
     {
         $action = $transaction->transaction_type === 'buy' ? 'Bought' : 'Sold';
         $shares = number_format($transaction->quantity, 0);
@@ -687,7 +688,7 @@ class PortfolioService
     /**
      * Generate description for dividend events
      */
-    private function getDividendDescription(\App\Models\DividendPayment $payment): string
+    private function getDividendDescription(DividendPayment $payment): string
     {
         $amount = number_format($payment->total_dividend_amount, 2);
 
