@@ -182,8 +182,8 @@ class DividendSafetyService
         foreach ($holdings as $holding) {
             try {
                 $safetyData = $this->calculateDividendSafetyScore($holding->stock_symbol);
-                $holdingValue = $holding->quantity * $holding->avg_cost_basis;
-                $annualDividend = $this->estimateAnnualDividend($holding->stock_symbol, $holding->quantity);
+                $holdingValue = (float)$holding->quantity * (float)$holding->avg_cost_basis;
+                $annualDividend = $this->estimateAnnualDividend($holding->stock_symbol, (float)$holding->quantity);
             
             $analysis['holdings_analysis'][$holding->stock_symbol] = [
                 'safety_score' => $safetyData['score'],

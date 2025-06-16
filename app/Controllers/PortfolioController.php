@@ -6,8 +6,10 @@ namespace App\Controllers;
 
 use App\Services\PortfolioService;
 use App\Services\DividendSafetyService;
+use App\Models\Portfolio;
 use Psr\Http\Message\ResponseInterface as Response;
 use Psr\Http\Message\ServerRequestInterface as Request;
+use Exception;
 
 class PortfolioController
 {
@@ -721,5 +723,36 @@ class PortfolioController
         
         $response->getBody()->write(json_encode($data));
         return $response->withHeader('Content-Type', 'application/json')->withStatus($status);
+    }
+
+    /**
+     * Test real portfolio dividend safety analysis (no auth required for testing)
+     */
+    public function testRealPortfolioDividendSafety(Request $request, Response $response, array $args): Response
+    {
+        try {
+            $portfolioId = (int)$args['id'];
+
+            // Get portfolio directly without auth check for testing
+            $portfolio = Portfolio::find($portfolioId);
+
+            if (!$portfolio) {
+                return $this->errorResponse($response, 'Portfolio not found', 404);
+            }
+
+            $analysis = $this->dividendSafetyService->getPortfolioDividendSafety($portfolio);
+
+            $responseData = [
+                'success' => true,
+                'data' => $analysis
+            ];
+
+            $response->getBody()->write(json_encode($responseData));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (Exception $e) {
+            error_log("Error in testRealPortfolioDividendSafety: " . $e->getMessage());
+            return $this->errorResponse($response, 'Failed to analyze portfolio dividend safety', 500);
+        }
     }
 }

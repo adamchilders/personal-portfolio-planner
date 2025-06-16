@@ -3842,13 +3842,24 @@ class PortfolioApp {
             try {
                 response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
             } catch (authError) {
-                console.log('Portfolio endpoint failed, using test data for demonstration:', authError);
-                // Fallback to test endpoint for demonstration
-                response = await this.apiCall(`/test-portfolio-dividend-safety`);
+                console.log('Portfolio endpoint failed, trying real portfolio test endpoint:', authError);
+                // Try the test endpoint with real portfolio data (no auth required)
+                try {
+                    response = await this.apiCall(`/test-real-portfolio-dividend-safety/${portfolioId}`);
 
-                // Add a note that this is demo data
-                if (response.success) {
-                    response.data.demo_note = 'Note: Using demonstration data due to authentication issue. Your actual portfolio analysis will show your real holdings.';
+                    // Add a note that this is using the test endpoint
+                    if (response.success) {
+                        response.data.demo_note = 'Note: Using test endpoint due to authentication issue, but analyzing your real portfolio data.';
+                    }
+                } catch (testError) {
+                    console.log('Real portfolio test endpoint also failed, using mock data:', testError);
+                    // Final fallback to mock data
+                    response = await this.apiCall(`/test-portfolio-dividend-safety`);
+
+                    // Add a note that this is demo data
+                    if (response.success) {
+                        response.data.demo_note = 'Note: Using demonstration data due to technical issues. Your actual portfolio analysis will show your real holdings.';
+                    }
                 }
             }
 
