@@ -8,6 +8,7 @@ use App\Models\Portfolio;
 use App\Models\Holding;
 use App\Models\Stock;
 use App\Models\Dividend;
+use App\Models\DividendSafetyCache;
 use Exception;
 
 class DividendSafetyService
@@ -25,9 +26,18 @@ class DividendSafetyService
     
     /**
      * Calculate dividend safety score for a stock (0-100 scale)
+     * Uses cached data if available and fresh (< 24 hours old)
      */
     public function calculateDividendSafetyScore(string $symbol): array
     {
+        $symbol = strtoupper($symbol);
+
+        // Check cache first
+        $cached = DividendSafetyCache::findBySymbol($symbol);
+        if ($cached && $cached->isFresh()) {
+            return $cached->toSafetyData();
+        }
+
         try {
             $financialData = $this->getFinancialData($symbol);
             $dividendData = $this->getDividendHistory($symbol);
@@ -111,14 +121,19 @@ class DividendSafetyService
             
             // Generate warnings
             $warnings = $this->generateWarnings($factors);
-            
-            return [
+
+            $safetyData = [
                 'score' => $finalScore,
                 'grade' => $this->getScoreGrade($finalScore),
                 'factors' => $factors,
                 'warnings' => $warnings,
                 'last_updated' => date('Y-m-d H:i:s')
             ];
+
+            // Save to cache
+            DividendSafetyCache::updateSafetyData($symbol, $safetyData);
+
+            return $safetyData;
             
         } catch (Exception $e) {
             error_log("Error calculating dividend safety score for {$symbol}: " . $e->getMessage());
@@ -131,7 +146,139 @@ class DividendSafetyService
             ];
         }
     }
-    
+
+    /**
+     * Bulk update dividend safety data for multiple symbols
+     * Only updates symbols that need refreshing (stale or missing data)
+     */
+    public function bulkUpdateSafetyData(array $symbols): array
+    {
+        $symbols = array_map('strtoupper', $symbols);
+        $symbolsNeedingUpdate = DividendSafetyCache::getSymbolsNeedingUpdate($symbols);
+
+        $results = [];
+        foreach ($symbolsNeedingUpdate as $symbol) {
+            try {
+                // Force fresh calculation (bypass cache check)
+                $safetyData = $this->calculateFreshSafetyScore($symbol);
+                $results[$symbol] = $safetyData;
+            } catch (Exception $e) {
+                error_log("Error updating safety data for {$symbol}: " . $e->getMessage());
+                $results[$symbol] = [
+                    'score' => 0,
+                    'grade' => 'Error',
+                    'factors' => [],
+                    'warnings' => ['Error updating safety data: ' . $e->getMessage()],
+                    'last_updated' => date('Y-m-d H:i:s')
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * Calculate fresh safety score (bypasses cache)
+     */
+    private function calculateFreshSafetyScore(string $symbol): array
+    {
+        $symbol = strtoupper($symbol);
+
+        $financialData = $this->getFinancialData($symbol);
+        $dividendData = $this->getDividendHistory($symbol);
+
+        if (empty($financialData) || empty($dividendData)) {
+            $safetyData = [
+                'score' => 0,
+                'grade' => 'N/A',
+                'factors' => [],
+                'warnings' => ['Insufficient data for analysis'],
+                'last_updated' => date('Y-m-d H:i:s')
+            ];
+
+            // Save to cache even if no data
+            DividendSafetyCache::updateSafetyData($symbol, $safetyData);
+            return $safetyData;
+        }
+
+        // Same calculation logic as calculateDividendSafetyScore but without cache check
+        $factors = [];
+        $totalScore = 0;
+        $maxScore = 0;
+
+        // Factor calculations (same as main method)
+        $payoutRatio = $this->calculatePayoutRatio($financialData, $dividendData);
+        $payoutScore = $this->scorePayoutRatio($payoutRatio);
+        $factors['payout_ratio'] = [
+            'value' => $payoutRatio,
+            'score' => $payoutScore,
+            'weight' => 25,
+            'description' => 'Percentage of earnings paid as dividends'
+        ];
+        $totalScore += $payoutScore * 0.25;
+        $maxScore += 25;
+
+        $fcfCoverage = $this->calculateFCFCoverage($financialData, $dividendData);
+        $fcfScore = $this->scoreFCFCoverage($fcfCoverage);
+        $factors['fcf_coverage'] = [
+            'value' => $fcfCoverage,
+            'score' => $fcfScore,
+            'weight' => 25,
+            'description' => 'Free cash flow coverage of dividends'
+        ];
+        $totalScore += $fcfScore * 0.25;
+        $maxScore += 25;
+
+        $debtRatio = $this->calculateDebtToEquity($financialData);
+        $debtScore = $this->scoreDebtRatio($debtRatio);
+        $factors['debt_ratio'] = [
+            'value' => $debtRatio,
+            'score' => $debtScore,
+            'weight' => 20,
+            'description' => 'Company leverage impact on dividend sustainability'
+        ];
+        $totalScore += $debtScore * 0.20;
+        $maxScore += 20;
+
+        $growthConsistency = $this->calculateDividendGrowthConsistency($dividendData);
+        $growthScore = $this->scoreGrowthConsistency($growthConsistency);
+        $factors['growth_consistency'] = [
+            'value' => $growthConsistency,
+            'score' => $growthScore,
+            'weight' => 15,
+            'description' => 'Historical dividend growth stability'
+        ];
+        $totalScore += $growthScore * 0.15;
+        $maxScore += 15;
+
+        $earningsStability = $this->calculateEarningsStability($financialData);
+        $stabilityScore = $this->scoreEarningsStability($earningsStability);
+        $factors['earnings_stability'] = [
+            'value' => $earningsStability,
+            'score' => $stabilityScore,
+            'weight' => 15,
+            'description' => 'Consistency of earnings over time'
+        ];
+        $totalScore += $stabilityScore * 0.15;
+        $maxScore += 15;
+
+        $finalScore = $maxScore > 0 ? (int)round(($totalScore / $maxScore) * 100) : 0;
+        $warnings = $this->generateWarnings($factors);
+
+        $safetyData = [
+            'score' => $finalScore,
+            'grade' => $this->getScoreGrade($finalScore),
+            'factors' => $factors,
+            'warnings' => $warnings,
+            'last_updated' => date('Y-m-d H:i:s')
+        ];
+
+        // Save to cache
+        DividendSafetyCache::updateSafetyData($symbol, $safetyData);
+
+        return $safetyData;
+    }
+
     /**
      * Get portfolio-wide dividend safety analysis
      */
@@ -178,7 +325,13 @@ class DividendSafetyService
         
         $totalValue = 0;
         $weightedScore = 0;
-        
+
+        // Get all symbols in portfolio
+        $symbols = $holdings->pluck('stock_symbol')->unique()->toArray();
+
+        // Bulk update any stale safety data
+        $this->bulkUpdateSafetyData($symbols);
+
         foreach ($holdings as $holding) {
             try {
                 $safetyData = $this->calculateDividendSafetyScore($holding->stock_symbol);
@@ -677,6 +830,31 @@ class DividendSafetyService
         });
 
         return array_values($annual);
+    }
+
+    /**
+     * Clean up old cached safety data
+     */
+    public function cleanupOldCache(): int
+    {
+        return DividendSafetyCache::cleanupOldEntries();
+    }
+
+    /**
+     * Get cache statistics
+     */
+    public function getCacheStats(): array
+    {
+        $total = DividendSafetyCache::count();
+        $fresh = DividendSafetyCache::where('last_updated', '>=', date('Y-m-d H:i:s', strtotime('-24 hours')))->count();
+        $stale = $total - $fresh;
+
+        return [
+            'total_cached' => $total,
+            'fresh_entries' => $fresh,
+            'stale_entries' => $stale,
+            'cache_hit_rate' => $total > 0 ? round(($fresh / $total) * 100, 1) : 0
+        ];
     }
 
     /**
