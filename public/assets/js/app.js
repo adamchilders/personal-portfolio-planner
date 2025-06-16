@@ -3660,7 +3660,10 @@ class PortfolioApp {
                 successMessage = 'Dividend payment recorded successfully!';
             }
 
-            await this.apiCall(endpoint, method, paymentData);
+            await this.apiCall(endpoint, {
+                method: method,
+                body: JSON.stringify(paymentData)
+            });
 
             this.closeDividendModal();
             this.showSuccess(successMessage);
@@ -3692,8 +3695,9 @@ class PortfolioApp {
                 notes: 'Bulk processed as cash dividend'
             }));
 
-            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/bulk`, 'POST', {
-                payments: payments
+            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/bulk`, {
+                method: 'POST',
+                body: JSON.stringify({ payments: payments })
             });
 
             this.showSuccess(`Bulk processing completed: ${response.summary.successful}/${response.summary.total_processed} payments processed successfully`);
@@ -3774,7 +3778,9 @@ class PortfolioApp {
         try {
             this.showLoading('Deleting dividend payment...');
 
-            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`, 'DELETE');
+            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`, {
+                method: 'DELETE'
+            });
 
             let message = 'Dividend payment deleted successfully!';
             if (response.returned_to_pending) {
