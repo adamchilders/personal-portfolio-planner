@@ -289,4 +289,42 @@ class DividendPaymentController extends BaseController
             throw new \InvalidArgumentException("Total dividend amount must be greater than 0");
         }
     }
+
+    /**
+     * Validate and optionally clean up invalid dividend payments
+     */
+    public function validateDividendPayments(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $queryParams = $request->getQueryParams();
+        $cleanup = isset($queryParams['cleanup']) && $queryParams['cleanup'] === 'true';
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+
+            if ($cleanup) {
+                // Remove invalid payments
+                $removedPayments = $this->dividendPaymentService->removeInvalidDividendPayments($portfolio);
+
+                return $this->successResponse($response, [
+                    'message' => 'Invalid dividend payments cleaned up successfully',
+                    'removed_payments' => $removedPayments,
+                    'count' => count($removedPayments)
+                ]);
+            } else {
+                // Just validate and return invalid payments
+                $invalidPayments = $this->dividendPaymentService->validateExistingDividendPayments($portfolio);
+
+                return $this->successResponse($response, [
+                    'message' => 'Dividend payment validation completed',
+                    'invalid_payments' => $invalidPayments,
+                    'count' => count($invalidPayments)
+                ]);
+            }
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
 }

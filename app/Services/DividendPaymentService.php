@@ -97,14 +97,35 @@ class DividendPaymentService
     public function recordDividendPayment(Portfolio $portfolio, array $paymentData): DividendPayment
     {
         $dividend = Dividend::findOrFail($paymentData['dividend_id']);
-        
+
         // Validate that this dividend hasn't been recorded yet
         $existingPayment = DividendPayment::where('portfolio_id', $portfolio->id)
             ->where('dividend_id', $dividend->id)
             ->first();
-        
+
         if ($existingPayment) {
             throw new Exception('Dividend payment already recorded for this dividend');
+        }
+
+        // Validate that the user actually owned shares on the ex-dividend date
+        $holding = $portfolio->holdings()
+            ->where('stock_symbol', $dividend->symbol)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$holding) {
+            throw new Exception("No holding found for {$dividend->symbol} in this portfolio");
+        }
+
+        $actualSharesOwned = $this->getSharesOwnedOnDate($holding, $dividend->ex_date->format('Y-m-d'));
+
+        if ($actualSharesOwned <= 0) {
+            throw new Exception("You did not own any shares of {$dividend->symbol} on the ex-dividend date ({$dividend->ex_date->format('Y-m-d')})");
+        }
+
+        // Validate that the shares_owned in the request doesn't exceed actual ownership
+        if ($paymentData['shares_owned'] > $actualSharesOwned) {
+            throw new Exception("Cannot record dividend for {$paymentData['shares_owned']} shares. You only owned {$actualSharesOwned} shares of {$dividend->symbol} on the ex-dividend date ({$dividend->ex_date->format('Y-m-d')})");
         }
         
         // Create the dividend payment record
@@ -378,5 +399,109 @@ class DividendPaymentService
     {
         $stock = Stock::where('symbol', $symbol)->with('quote')->first();
         return $stock && $stock->quote ? (float)$stock->quote->current_price : null;
+    }
+
+    /**
+     * Validate existing dividend payments and identify invalid ones
+     */
+    public function validateExistingDividendPayments(Portfolio $portfolio): array
+    {
+        $invalidPayments = [];
+
+        $payments = DividendPayment::where('portfolio_id', $portfolio->id)
+            ->with('dividend')
+            ->get();
+
+        foreach ($payments as $payment) {
+            if (!$payment->dividend) {
+                $invalidPayments[] = [
+                    'payment_id' => $payment->id,
+                    'stock_symbol' => $payment->stock_symbol,
+                    'payment_date' => $payment->payment_date->format('Y-m-d'),
+                    'amount' => $payment->total_dividend_amount,
+                    'reason' => 'Dividend record not found'
+                ];
+                continue;
+            }
+
+            // Check if holding exists
+            $holding = $portfolio->holdings()
+                ->where('stock_symbol', $payment->stock_symbol)
+                ->first(); // Include inactive holdings for historical validation
+
+            if (!$holding) {
+                $invalidPayments[] = [
+                    'payment_id' => $payment->id,
+                    'stock_symbol' => $payment->stock_symbol,
+                    'payment_date' => $payment->payment_date->format('Y-m-d'),
+                    'amount' => $payment->total_dividend_amount,
+                    'reason' => 'No holding found for this stock'
+                ];
+                continue;
+            }
+
+            // Check shares owned on ex-dividend date
+            $actualSharesOwned = $this->getSharesOwnedOnDate($holding, $payment->dividend->ex_date->format('Y-m-d'));
+
+            if ($actualSharesOwned <= 0) {
+                $invalidPayments[] = [
+                    'payment_id' => $payment->id,
+                    'stock_symbol' => $payment->stock_symbol,
+                    'payment_date' => $payment->payment_date->format('Y-m-d'),
+                    'ex_date' => $payment->dividend->ex_date->format('Y-m-d'),
+                    'amount' => $payment->total_dividend_amount,
+                    'shares_claimed' => $payment->shares_owned,
+                    'shares_actually_owned' => $actualSharesOwned,
+                    'reason' => 'No shares owned on ex-dividend date'
+                ];
+            } elseif ($payment->shares_owned > $actualSharesOwned) {
+                $invalidPayments[] = [
+                    'payment_id' => $payment->id,
+                    'stock_symbol' => $payment->stock_symbol,
+                    'payment_date' => $payment->payment_date->format('Y-m-d'),
+                    'ex_date' => $payment->dividend->ex_date->format('Y-m-d'),
+                    'amount' => $payment->total_dividend_amount,
+                    'shares_claimed' => $payment->shares_owned,
+                    'shares_actually_owned' => $actualSharesOwned,
+                    'reason' => 'Claimed more shares than actually owned'
+                ];
+            }
+        }
+
+        return $invalidPayments;
+    }
+
+    /**
+     * Remove invalid dividend payments
+     */
+    public function removeInvalidDividendPayments(Portfolio $portfolio): array
+    {
+        $invalidPayments = $this->validateExistingDividendPayments($portfolio);
+        $removedPayments = [];
+
+        foreach ($invalidPayments as $invalidPayment) {
+            $payment = DividendPayment::find($invalidPayment['payment_id']);
+            if ($payment) {
+                // Store info before deletion
+                $removedPayments[] = [
+                    'stock_symbol' => $payment->stock_symbol,
+                    'payment_date' => $payment->payment_date->format('Y-m-d'),
+                    'amount' => $payment->total_dividend_amount,
+                    'reason' => $invalidPayment['reason']
+                ];
+
+                // Remove any associated dividend transactions
+                Transaction::where('portfolio_id', $portfolio->id)
+                    ->where('stock_symbol', $payment->stock_symbol)
+                    ->where('transaction_type', 'dividend')
+                    ->where('transaction_date', $payment->payment_date)
+                    ->delete();
+
+                // Delete the payment
+                $payment->delete();
+            }
+        }
+
+        return $removedPayments;
     }
 }
