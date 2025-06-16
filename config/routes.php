@@ -308,6 +308,7 @@ $app->group('/admin', function ($group) {
 $app->get('/api/test-dividend-safety/{symbol:[A-Z0-9.-]+}', [PortfolioController::class, 'testDividendSafety']);
 $app->get('/api/test-portfolio-dividend-safety', [PortfolioController::class, 'testPortfolioDividendSafety']);
 $app->get('/api/test-real-portfolio-dividend-safety/{id:[0-9]+}', [PortfolioController::class, 'testRealPortfolioDividendSafety']);
+$app->get('/api/test-fmp-financial/{symbol:[A-Z0-9.-]+}', [PortfolioController::class, 'testFmpFinancialData']);
 
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {

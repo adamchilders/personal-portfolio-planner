@@ -766,4 +766,78 @@ class PortfolioController
             return $this->errorResponse($response, 'Failed to analyze portfolio dividend safety', 500);
         }
     }
+
+    /**
+     * Test FMP financial statements API for a specific stock
+     */
+    public function testFmpFinancialData(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol']);
+
+        try {
+            $fmpService = new \App\Services\FinancialModelingPrepService();
+
+            // Test API availability
+            $isAvailable = $fmpService->isAvailable();
+            $usageStats = $fmpService->getUsageStats();
+
+            $result = [
+                'symbol' => $symbol,
+                'fmp_available' => $isAvailable,
+                'usage_stats' => $usageStats,
+                'test_results' => []
+            ];
+
+            if ($isAvailable) {
+                // Test each financial statement type
+                try {
+                    $incomeStatements = $fmpService->fetchIncomeStatements($symbol, 3);
+                    $result['test_results']['income_statements'] = [
+                        'success' => true,
+                        'count' => count($incomeStatements),
+                        'sample' => !empty($incomeStatements) ? array_keys($incomeStatements[0] ?? []) : []
+                    ];
+                } catch (Exception $e) {
+                    $result['test_results']['income_statements'] = [
+                        'success' => false,
+                        'error' => $e->getMessage()
+                    ];
+                }
+
+                try {
+                    $balanceSheets = $fmpService->fetchBalanceSheets($symbol, 3);
+                    $result['test_results']['balance_sheets'] = [
+                        'success' => true,
+                        'count' => count($balanceSheets),
+                        'sample' => !empty($balanceSheets) ? array_keys($balanceSheets[0] ?? []) : []
+                    ];
+                } catch (Exception $e) {
+                    $result['test_results']['balance_sheets'] = [
+                        'success' => false,
+                        'error' => $e->getMessage()
+                    ];
+                }
+
+                try {
+                    $cashFlowStatements = $fmpService->fetchCashFlowStatements($symbol, 3);
+                    $result['test_results']['cash_flow_statements'] = [
+                        'success' => true,
+                        'count' => count($cashFlowStatements),
+                        'sample' => !empty($cashFlowStatements) ? array_keys($cashFlowStatements[0] ?? []) : []
+                    ];
+                } catch (Exception $e) {
+                    $result['test_results']['cash_flow_statements'] = [
+                        'success' => false,
+                        'error' => $e->getMessage()
+                    ];
+                }
+            }
+
+            $response->getBody()->write(json_encode($result, JSON_PRETTY_PRINT));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 500);
+        }
+    }
 }
