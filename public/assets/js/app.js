@@ -1006,7 +1006,10 @@ class PortfolioApp {
             }
         };
 
-        const response = await fetch(url, { ...defaultOptions, ...options });
+        const finalOptions = { ...defaultOptions, ...options };
+        console.log('API Call Debug:', { url, options, finalOptions });
+
+        const response = await fetch(url, finalOptions);
 
         if (!response.ok) {
             // Try to get error details from response
@@ -3778,9 +3781,11 @@ class PortfolioApp {
         try {
             this.showLoading('Deleting dividend payment...');
 
-            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`, {
-                method: 'DELETE'
-            });
+            const endpoint = `/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`;
+            const options = { method: 'DELETE' };
+            console.log('DELETE API call:', endpoint, options);
+
+            const response = await this.apiCall(endpoint, options);
 
             let message = 'Dividend payment deleted successfully!';
             if (response.returned_to_pending) {
