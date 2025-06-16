@@ -3837,8 +3837,8 @@ class PortfolioApp {
         try {
             this.showLoading('Analyzing dividend safety...');
 
-            // Fetch dividend safety data (using test endpoint for demonstration)
-            const response = await this.apiCall(`/test-portfolio-dividend-safety`);
+            // Fetch dividend safety data from your actual portfolio
+            const response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
 
             if (response.success) {
                 document.getElementById('app').innerHTML = this.getDividendSafetyHTML(response.data, portfolioId);

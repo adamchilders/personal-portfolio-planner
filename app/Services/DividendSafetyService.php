@@ -157,22 +157,33 @@ class DividendSafetyService
             ];
 
             if ($holdings->isEmpty()) {
-                // Return mock analysis for demonstration if no holdings
-                return $this->getMockPortfolioAnalysis();
+                $analysis['recommendations'] = ['Add dividend-paying stocks to your portfolio to begin safety analysis'];
+                return $analysis;
             }
         } catch (Exception $e) {
             error_log("Error in getPortfolioDividendSafety: " . $e->getMessage());
-            // Return mock analysis for demonstration
-            return $this->getMockPortfolioAnalysis();
+            // Return empty analysis with error message
+            return [
+                'overall_score' => 0,
+                'overall_grade' => 'N/A',
+                'total_dividend_income' => 0,
+                'safe_dividend_income' => 0,
+                'at_risk_dividend_income' => 0,
+                'holdings_analysis' => [],
+                'risk_distribution' => ['safe' => 0, 'moderate' => 0, 'risky' => 0, 'dangerous' => 0],
+                'top_risks' => [],
+                'recommendations' => ['Error analyzing portfolio: ' . $e->getMessage()]
+            ];
         }
         
         $totalValue = 0;
         $weightedScore = 0;
         
         foreach ($holdings as $holding) {
-            $safetyData = $this->calculateDividendSafetyScore($holding->stock_symbol);
-            $holdingValue = $holding->quantity * $holding->avg_cost_basis;
-            $annualDividend = $this->estimateAnnualDividend($holding->stock_symbol, $holding->quantity);
+            try {
+                $safetyData = $this->calculateDividendSafetyScore($holding->stock_symbol);
+                $holdingValue = $holding->quantity * $holding->avg_cost_basis;
+                $annualDividend = $this->estimateAnnualDividend($holding->stock_symbol, $holding->quantity);
             
             $analysis['holdings_analysis'][$holding->stock_symbol] = [
                 'safety_score' => $safetyData['score'],
@@ -209,6 +220,17 @@ class DividendSafetyService
                     'score' => $safetyData['score'],
                     'annual_dividend' => $annualDividend,
                     'warnings' => $safetyData['warnings']
+                ];
+            }
+            } catch (Exception $e) {
+                error_log("Error analyzing holding {$holding->stock_symbol}: " . $e->getMessage());
+                // Add a placeholder entry for failed analysis
+                $analysis['holdings_analysis'][$holding->stock_symbol] = [
+                    'safety_score' => 0,
+                    'safety_grade' => 'N/A',
+                    'holding_value' => 0,
+                    'annual_dividend' => 0,
+                    'warnings' => ['Analysis failed: ' . $e->getMessage()]
                 ];
             }
         }
