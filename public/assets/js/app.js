@@ -3908,7 +3908,20 @@ class PortfolioApp {
         const gradeColor = this.getGradeColor(analysis.overall_grade);
         const riskCount = analysis.risk_distribution.risky + analysis.risk_distribution.dangerous;
 
+        // Check if using demo data
+        const isUsingDemoData = analysis.data_source === 'Demo Data' || !analysis.is_real_data;
+        const dataSourceBanner = isUsingDemoData ? `
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 12px; margin-bottom: 16px; display: flex; align-items: center; gap: 12px;">
+                <div style="font-size: 1.2rem;">ℹ️</div>
+                <div>
+                    <div style="font-weight: 600; color: #856404; margin-bottom: 4px;">Demonstration Mode</div>
+                    <div style="font-size: var(--font-size-sm); color: #856404;">Using demonstration data. Configure FMP API key in Admin panel for real analysis.</div>
+                </div>
+            </div>
+        ` : '';
+
         return `
+            ${dataSourceBanner}
             <div class="grid grid-cols-3 gap-4">
                 <div class="text-center">
                     <div style="font-size: 2rem; font-weight: 600; color: ${gradeColor}; margin-bottom: var(--space-1);">
@@ -4016,6 +4029,21 @@ class PortfolioApp {
         const riskPercentage = analysis.total_dividend_income > 0
             ? ((analysis.at_risk_dividend_income / analysis.total_dividend_income) * 100).toFixed(1)
             : 0;
+
+        // Check if using demo data
+        const isUsingDemoData = analysis.data_source === 'Demo Data' || !analysis.is_real_data;
+        const dataSourceBanner = isUsingDemoData ? `
+            <div style="background: #fff3cd; border: 1px solid #ffeaa7; border-radius: 8px; padding: 16px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px;">
+                <div style="font-size: 1.5rem;">ℹ️</div>
+                <div>
+                    <div style="font-weight: 600; color: #856404; margin-bottom: 8px; font-size: 1.1rem;">Demonstration Mode</div>
+                    <div style="color: #856404; line-height: 1.4;">
+                        Note: Using demonstration data due to technical issues. Your actual portfolio analysis will show your real holdings.
+                        <br><strong>To get real data:</strong> Configure Financial Modeling Prep API key in the Admin panel.
+                    </div>
+                </div>
+            </div>
+        ` : '';
 
         return `
             <div class="min-h-screen" style="background: var(--gray-50);">

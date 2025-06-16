@@ -5,9 +5,10 @@ declare(strict_types=1);
 namespace App\Models;
 
 use App\Helpers\DateTimeHelper;
+use Illuminate\Database\Eloquent\Model;
 use DateTime;
 
-class DividendSafetyCache extends BaseModel
+class DividendSafetyCache extends Model
 {
     protected static string $table = 'dividend_safety_cache';
     

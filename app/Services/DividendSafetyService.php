@@ -127,7 +127,9 @@ class DividendSafetyService
                 'grade' => $this->getScoreGrade($finalScore),
                 'factors' => $factors,
                 'warnings' => $warnings,
-                'last_updated' => date('Y-m-d H:i:s')
+                'last_updated' => date('Y-m-d H:i:s'),
+                'data_source' => $this->fmpService->isAvailable() ? 'FMP API' : 'Demo Data',
+                'is_real_data' => $this->fmpService->isAvailable()
             ];
 
             // Save to cache
@@ -855,6 +857,51 @@ class DividendSafetyService
             'stale_entries' => $stale,
             'cache_hit_rate' => $total > 0 ? round(($fresh / $total) * 100, 1) : 0
         ];
+    }
+
+    /**
+     * Get diagnostic information about data sources
+     */
+    public function getDiagnosticInfo(): array
+    {
+        $fmpAvailable = $this->fmpService->isAvailable();
+        $fmpStats = $this->fmpService->getUsageStats();
+
+        return [
+            'fmp_api' => [
+                'available' => $fmpAvailable,
+                'stats' => $fmpStats
+            ],
+            'data_sources' => [
+                'financial_data' => $fmpAvailable ? 'FMP API' : 'Mock Data (Demo Mode)',
+                'dividend_data' => 'Database + FMP API fallback'
+            ],
+            'cache_stats' => $this->getCacheStats(),
+            'recommendations' => $this->getDataSourceRecommendations($fmpAvailable)
+        ];
+    }
+
+    /**
+     * Get recommendations for improving data sources
+     */
+    private function getDataSourceRecommendations(bool $fmpAvailable): array
+    {
+        $recommendations = [];
+
+        if (!$fmpAvailable) {
+            $recommendations[] = 'Configure Financial Modeling Prep API key for real financial data';
+            $recommendations[] = 'Visit Admin panel to add FMP API key';
+            $recommendations[] = 'Currently using demonstration data for safety analysis';
+        }
+
+        $cacheStats = $this->getCacheStats();
+        if ($cacheStats['total_cached'] === 0) {
+            $recommendations[] = 'No cached safety data - first analysis will be slower';
+        } elseif ($cacheStats['stale_entries'] > 0) {
+            $recommendations[] = "Update {$cacheStats['stale_entries']} stale cache entries for better performance";
+        }
+
+        return $recommendations;
     }
 
     /**
