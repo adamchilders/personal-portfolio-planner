@@ -740,11 +740,22 @@ class PortfolioController
                 return $this->errorResponse($response, 'Portfolio not found', 404);
             }
 
+            // Get diagnostic info first
+            $diagnostics = $this->dividendSafetyService->getDiagnosticInfo();
+
             $analysis = $this->dividendSafetyService->getPortfolioDividendSafety($portfolio);
 
             $responseData = [
                 'success' => true,
-                'data' => $analysis
+                'data' => $analysis,
+                'diagnostics' => $diagnostics,
+                'portfolio_holdings' => $portfolio->holdings()->where('is_active', true)->get()->map(function($holding) {
+                    return [
+                        'symbol' => $holding->stock_symbol,
+                        'quantity' => $holding->quantity,
+                        'avg_cost_basis' => $holding->avg_cost_basis
+                    ];
+                })
             ];
 
             $response->getBody()->write(json_encode($responseData));

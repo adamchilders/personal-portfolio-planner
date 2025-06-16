@@ -122,14 +122,21 @@ class DividendSafetyService
             // Generate warnings
             $warnings = $this->generateWarnings($factors);
 
+            // Determine if we used real data
+            $usedRealFinancialData = !$this->isUsingMockFinancialData($financialData);
+            $usedRealDividendData = !$this->isUsingMockDividendData($dividendData);
+
             $safetyData = [
                 'score' => $finalScore,
                 'grade' => $this->getScoreGrade($finalScore),
                 'factors' => $factors,
                 'warnings' => $warnings,
                 'last_updated' => date('Y-m-d H:i:s'),
-                'data_source' => $this->fmpService->isAvailable() ? 'FMP API' : 'Demo Data',
-                'is_real_data' => $this->fmpService->isAvailable()
+                'data_source' => $usedRealFinancialData ? 'FMP API' : 'Demo Data',
+                'is_real_data' => $usedRealFinancialData,
+                'financial_data_source' => $usedRealFinancialData ? 'FMP API' : 'Mock Data',
+                'dividend_data_source' => $usedRealDividendData ? 'Database' : 'Mock Data',
+                'fmp_available' => $this->fmpService->isAvailable()
             ];
 
             // Save to cache
@@ -410,18 +417,36 @@ class DividendSafetyService
      */
     private function getFinancialData(string $symbol): array
     {
+        // Check if FMP is available first
+        if (!$this->fmpService->isAvailable()) {
+            error_log("FMP API not available for {$symbol} - using mock data");
+            return $this->getMockFinancialData($symbol);
+        }
+
         try {
             // Try to fetch from FMP first
+            error_log("Attempting to fetch financial data for {$symbol} from FMP API");
             $data = $this->fmpService->fetchFinancialStatements($symbol, 5);
+
+            // Log what we got back
+            error_log("FMP API response for {$symbol}: " . json_encode([
+                'income_statements_count' => count($data['income_statements'] ?? []),
+                'balance_sheets_count' => count($data['balance_sheets'] ?? []),
+                'cash_flow_statements_count' => count($data['cash_flow_statements'] ?? []),
+                'has_data' => !empty($data['income_statements']) || !empty($data['balance_sheets']) || !empty($data['cash_flow_statements'])
+            ]));
 
             // If we get empty data, use mock data for demonstration
             if (empty($data['income_statements']) && empty($data['balance_sheets']) && empty($data['cash_flow_statements'])) {
+                error_log("FMP API returned empty financial data for {$symbol} - falling back to mock data");
                 return $this->getMockFinancialData($symbol);
             }
 
+            error_log("Successfully fetched real financial data for {$symbol} from FMP API");
             return $data;
         } catch (Exception $e) {
             error_log("Error fetching financial data for {$symbol}: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
             // Return mock data for demonstration purposes
             return $this->getMockFinancialData($symbol);
         }
@@ -504,11 +529,15 @@ class DividendSafetyService
             ->get()
             ->toArray();
 
+        error_log("Dividend history for {$symbol}: found " . count($dividends) . " dividend records in database");
+
         // If no dividend data found, use mock data for demonstration
         if (empty($dividends)) {
+            error_log("No dividend data found for {$symbol} in database - using mock data");
             return $this->getMockDividendHistory($symbol);
         }
 
+        error_log("Using real dividend data for {$symbol} from database");
         return $dividends;
     }
 
@@ -902,6 +931,43 @@ class DividendSafetyService
         }
 
         return $recommendations;
+    }
+
+    /**
+     * Check if financial data is mock data
+     */
+    private function isUsingMockFinancialData(array $financialData): bool
+    {
+        // Check if this looks like our mock data structure
+        if (empty($financialData['income_statements'])) {
+            return true;
+        }
+
+        $firstStatement = $financialData['income_statements'][0] ?? [];
+
+        // Check for specific mock data values we use
+        $mockEpsValues = [6.05, 9.65, 6.04]; // AAPL, MSFT, JNJ mock EPS
+        $eps = $firstStatement['eps'] ?? 0;
+
+        return in_array($eps, $mockEpsValues);
+    }
+
+    /**
+     * Check if dividend data is mock data
+     */
+    private function isUsingMockDividendData(array $dividendData): bool
+    {
+        if (empty($dividendData)) {
+            return true;
+        }
+
+        // Check if all dividends have the same amount (characteristic of mock data)
+        $amounts = array_column($dividendData, 'amount');
+        $uniqueAmounts = array_unique($amounts);
+
+        // Mock data typically has the same amount for all quarters
+        // Real data would have varying amounts
+        return count($uniqueAmounts) <= 1;
     }
 
     /**
