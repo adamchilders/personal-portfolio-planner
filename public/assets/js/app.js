@@ -3175,7 +3175,7 @@ class PortfolioApp {
 
                                 <!-- Analytics Tab -->
                                 <div id="analytics-tab" class="tab-content">
-                                    ${this.getDividendAnalyticsTabHTML(analytics, portfolioId)}
+                                    ${this.getDividendAnalyticsTabHTML(analytics, portfolio.id)}
                                 </div>
                             </div>
                         </div>
