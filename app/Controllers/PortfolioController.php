@@ -627,6 +627,90 @@ class PortfolioController
         }
     }
 
+    /**
+     * Test portfolio dividend safety endpoint (no auth required)
+     */
+    public function testPortfolioDividendSafety(Request $request, Response $response, array $args): Response
+    {
+        try {
+            // Get mock portfolio analysis directly
+            $mockAnalysis = [
+                'overall_score' => 75,
+                'overall_grade' => 'B',
+                'total_dividend_income' => 2450.00,
+                'safe_dividend_income' => 1680.00,
+                'at_risk_dividend_income' => 770.00,
+                'holdings_analysis' => [
+                    'AAPL' => [
+                        'safety_score' => 68,
+                        'safety_grade' => 'C',
+                        'holding_value' => 15000.00,
+                        'annual_dividend' => 360.00,
+                        'warnings' => ['High debt ratio may impact dividend sustainability']
+                    ],
+                    'MSFT' => [
+                        'safety_score' => 83,
+                        'safety_grade' => 'A',
+                        'holding_value' => 12000.00,
+                        'annual_dividend' => 816.00,
+                        'warnings' => []
+                    ],
+                    'JNJ' => [
+                        'safety_score' => 89,
+                        'safety_grade' => 'A',
+                        'holding_value' => 10000.00,
+                        'annual_dividend' => 904.00,
+                        'warnings' => []
+                    ],
+                    'T' => [
+                        'safety_score' => 45,
+                        'safety_grade' => 'D',
+                        'holding_value' => 8000.00,
+                        'annual_dividend' => 370.00,
+                        'warnings' => ['High payout ratio', 'Declining earnings stability']
+                    ]
+                ],
+                'risk_distribution' => [
+                    'safe' => 2,      // MSFT, JNJ
+                    'moderate' => 1,  // AAPL
+                    'risky' => 0,
+                    'dangerous' => 1  // T
+                ],
+                'top_risks' => [
+                    [
+                        'symbol' => 'T',
+                        'score' => 45,
+                        'annual_dividend' => 370.00,
+                        'warnings' => ['High payout ratio', 'Declining earnings stability']
+                    ]
+                ],
+                'recommendations' => [
+                    'Consider reducing exposure to AT&T (T) due to low safety score',
+                    'Portfolio has good diversification with 68% of dividend income from safe sources',
+                    'Consider adding more dividend aristocrats to improve overall safety'
+                ]
+            ];
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'data' => $mockAnalysis,
+                'test' => true,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'test' => true,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [
