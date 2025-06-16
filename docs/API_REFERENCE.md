@@ -254,14 +254,15 @@ All API responses follow this format:
 ```
 
 ### DELETE /api/portfolios/{id}/holdings/{symbol}
-**Purpose**: Delete all transactions for a specific stock from a portfolio (removes the holding)
+**Purpose**: Delete all transactions and dividend payments for a specific stock from a portfolio (removes the holding completely)
 **Authentication**: Required
 **Response**:
 ```json
 {
   "success": true,
-  "message": "All AAPL trades deleted successfully",
-  "transactions_deleted": 5
+  "message": "All AAPL trades and dividend payments deleted successfully",
+  "transactions_deleted": 5,
+  "dividend_payments_deleted": 3
 }
 ```
 

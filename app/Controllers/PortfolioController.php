@@ -225,7 +225,12 @@ class PortfolioController
             }
 
             // Delete all transactions for this stock in this portfolio
-            $deletedCount = $portfolio->transactions()
+            $deletedTransactions = $portfolio->transactions()
+                ->where('stock_symbol', $symbol)
+                ->delete();
+
+            // Delete all dividend payments for this stock in this portfolio
+            $deletedDividends = \App\Models\DividendPayment::where('portfolio_id', $portfolio->id)
                 ->where('stock_symbol', $symbol)
                 ->delete();
 
@@ -234,8 +239,9 @@ class PortfolioController
 
             $responseData = [
                 'success' => true,
-                'message' => "All {$symbol} trades deleted successfully",
-                'transactions_deleted' => $deletedCount
+                'message' => "All {$symbol} trades and dividend payments deleted successfully",
+                'transactions_deleted' => $deletedTransactions,
+                'dividend_payments_deleted' => $deletedDividends
             ];
 
             $response->getBody()->write(json_encode($responseData));
