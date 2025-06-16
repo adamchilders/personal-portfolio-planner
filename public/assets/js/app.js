@@ -3022,7 +3022,7 @@ class PortfolioApp {
                 </div>
                 <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Portfolio Yield</div>
                 <div style="font-size: var(--font-size-xs); color: var(--gray-500); margin-top: var(--space-1);">
-                    ${analytics.drip_vs_cash ? analytics.drip_vs_cash.drip_percentage.toFixed(0) + '% DRIP' : 'No data'}
+                    ${analytics.drip_vs_cash && analytics.drip_vs_cash.drip_percentage !== undefined ? analytics.drip_vs_cash.drip_percentage.toFixed(0) + '% DRIP' : 'No data'}
                 </div>
             </div>
         `;
