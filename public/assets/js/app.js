@@ -1007,7 +1007,6 @@ class PortfolioApp {
         };
 
         const finalOptions = { ...defaultOptions, ...options };
-        console.log('API Call Debug:', { url, options, finalOptions });
 
         const response = await fetch(url, finalOptions);
 
@@ -3245,7 +3244,7 @@ class PortfolioApp {
                                     $${payment.total_dividend_amount.toFixed(2)}
                                 </div>
                                 <div style="font-size: var(--font-size-sm); color: var(--gray-500); margin-bottom: var(--space-3);">
-                                    $${payment.dividend_per_share.toFixed(4)} per share
+                                    $${parseFloat(payment.dividend_per_share || 0).toFixed(4)} per share
                                 </div>
                                 <button class="btn btn-primary" onclick="portfolioApp.showRecordDividendModal(${JSON.stringify(payment).replace(/"/g, '&quot;')})">
                                     Record Payment
@@ -3280,10 +3279,7 @@ class PortfolioApp {
             </div>
 
             <div class="grid gap-4">
-                ${paymentHistory.map(payment => {
-                    // Debug logging for payment data
-                    console.log('Rendering payment:', payment.id, payment.stock_symbol, payment);
-                    return `
+                ${paymentHistory.map(payment => `
                     <div class="card" style="border-left: 4px solid var(--success-green);">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
@@ -3345,8 +3341,7 @@ class PortfolioApp {
                             </div>
                         </div>
                     </div>
-                `;
-                }).join('')}
+                `).join('')}
             </div>
         `;
     }
@@ -3781,11 +3776,9 @@ class PortfolioApp {
         try {
             this.showLoading('Deleting dividend payment...');
 
-            const endpoint = `/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`;
-            const options = { method: 'DELETE' };
-            console.log('DELETE API call:', endpoint, options);
-
-            const response = await this.apiCall(endpoint, options);
+            const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`, {
+                method: 'DELETE'
+            });
 
             let message = 'Dividend payment deleted successfully!';
             if (response.returned_to_pending) {
