@@ -4171,11 +4171,34 @@ class PortfolioApp {
             `;
         }
 
+        // Filter out holdings that should be excluded (ETFs, etc.)
+        const validHoldings = Object.entries(analysis.holdings_analysis).filter(([symbol, holding]) => {
+            // Exclude holdings with null scores or that are marked as excluded
+            return holding.safety_score !== null &&
+                   holding.safety_score !== undefined &&
+                   !holding.excluded_from_analysis &&
+                   !(holding.warnings && Array.isArray(holding.warnings) &&
+                     holding.warnings.some(w => w.includes('financial statements')));
+        });
+
+        if (validHoldings.length === 0) {
+            return `
+                <div class="card mb-6">
+                    <h4 class="mb-4">📊 Individual Holdings Analysis</h4>
+                    <div class="text-center py-8" style="color: var(--gray-600);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📈</div>
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">No Corporate Stocks to Analyze</div>
+                        <div style="font-size: var(--font-size-sm);">Your holdings appear to be ETFs or other securities without corporate financial statements</div>
+                    </div>
+                </div>
+            `;
+        }
+
         return `
             <div class="card mb-6">
                 <h4 class="mb-4">📊 Individual Holdings Analysis</h4>
                 <div class="space-y-4">
-                    ${Object.entries(analysis.holdings_analysis).map(([symbol, holding]) =>
+                    ${validHoldings.map(([symbol, holding]) =>
                         this.getHoldingDetailHTML(symbol, holding)
                     ).join('')}
                 </div>
@@ -4299,9 +4322,24 @@ class PortfolioApp {
     getHoldingNegatives(holding) {
         const negatives = [];
 
-        // Add warnings from the analysis
-        if (holding.warnings && holding.warnings.length > 0) {
-            negatives.push(...holding.warnings);
+        // Add warnings from the analysis - handle both array and string formats
+        if (holding.warnings) {
+            if (Array.isArray(holding.warnings)) {
+                negatives.push(...holding.warnings);
+            } else if (typeof holding.warnings === 'string') {
+                // Handle JSON string that might need parsing
+                try {
+                    const parsed = JSON.parse(holding.warnings);
+                    if (Array.isArray(parsed)) {
+                        negatives.push(...parsed);
+                    } else {
+                        negatives.push(holding.warnings);
+                    }
+                } catch (e) {
+                    // If it's not JSON, treat as a regular string
+                    negatives.push(holding.warnings);
+                }
+            }
         }
 
         // Add specific concerns based on low factor scores
