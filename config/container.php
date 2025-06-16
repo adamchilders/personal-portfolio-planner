@@ -11,6 +11,8 @@ use App\Services\AuthService;
 use App\Services\UserService;
 use App\Services\PortfolioService;
 use App\Services\StockDataService;
+use App\Services\FinancialModelingPrepService;
+use App\Services\DividendSafetyService;
 use App\Controllers\AuthController;
 use App\Controllers\PortfolioController;
 use App\Controllers\StockController;
@@ -116,13 +118,27 @@ $container->set(PortfolioService::class, function ($container) {
     return new PortfolioService($container->get(StockDataService::class));
 });
 
+$container->set(FinancialModelingPrepService::class, function () {
+    return new FinancialModelingPrepService();
+});
+
+$container->set(DividendSafetyService::class, function ($container) {
+    return new DividendSafetyService(
+        $container->get(FinancialModelingPrepService::class),
+        $container->get(StockDataService::class)
+    );
+});
+
 // Controllers
 $container->set(AuthController::class, function ($container) {
     return new AuthController($container->get(AuthService::class));
 });
 
 $container->set(PortfolioController::class, function ($container) {
-    return new PortfolioController($container->get(PortfolioService::class));
+    return new PortfolioController(
+        $container->get(PortfolioService::class),
+        $container->get(DividendSafetyService::class)
+    );
 });
 
 $container->set(StockController::class, function ($container) {
