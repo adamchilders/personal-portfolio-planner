@@ -122,9 +122,9 @@ class DividendSafetyService
             // Generate warnings
             $warnings = $this->generateWarnings($factors);
 
-            // Determine if we used real data
-            $usedRealFinancialData = !$this->isUsingMockFinancialData($financialData);
-            $usedRealDividendData = !$this->isUsingMockDividendData($dividendData);
+            // All data is real data now (no mock data)
+            $hasFinancialData = !empty($financialData);
+            $hasDividendData = !empty($dividendData);
 
             $safetyData = [
                 'score' => $finalScore,
@@ -132,10 +132,10 @@ class DividendSafetyService
                 'factors' => $factors,
                 'warnings' => $warnings,
                 'last_updated' => date('Y-m-d H:i:s'),
-                'data_source' => $usedRealFinancialData ? 'FMP API' : 'Demo Data',
-                'is_real_data' => $usedRealFinancialData,
-                'financial_data_source' => $usedRealFinancialData ? 'FMP API' : 'Mock Data',
-                'dividend_data_source' => $usedRealDividendData ? 'Database' : 'Mock Data',
+                'data_source' => 'FMP API',
+                'is_real_data' => true,
+                'financial_data_source' => $hasFinancialData ? 'FMP API' : 'Not Available',
+                'dividend_data_source' => $hasDividendData ? 'Database' : 'Not Available',
                 'fmp_available' => $this->fmpService->isAvailable()
             ];
 
@@ -453,7 +453,7 @@ class DividendSafetyService
     }
     
     /**
-     * Get financial data from FMP (with fallback to mock data)
+     * Get financial data from FMP API only
      */
     private function getFinancialData(string $symbol): array
     {
@@ -463,14 +463,14 @@ class DividendSafetyService
             return []; // Return empty data to indicate no financial statements available
         }
 
-        // Check if FMP is available first
+        // Check if FMP is available
         if (!$this->fmpService->isAvailable()) {
-            error_log("FMP API not available for {$symbol} - using mock data");
-            return $this->getMockFinancialData($symbol);
+            error_log("FMP API not available for {$symbol} - cannot analyze without API");
+            return [];
         }
 
         try {
-            // Try to fetch from FMP first
+            // Fetch from FMP API
             error_log("Attempting to fetch financial data for {$symbol} from FMP API");
             $data = $this->fmpService->fetchFinancialStatements($symbol, 5);
 
@@ -482,18 +482,10 @@ class DividendSafetyService
                 'has_data' => !empty($data['income_statements']) || !empty($data['balance_sheets']) || !empty($data['cash_flow_statements'])
             ]));
 
-            // If we get empty data, check if it's a known corporate stock before using mock data
+            // If we get empty data, return empty (no mock data fallback)
             if (empty($data['income_statements']) && empty($data['balance_sheets']) && empty($data['cash_flow_statements'])) {
-                error_log("FMP API returned empty financial data for {$symbol}");
-
-                // Only use mock data for known corporate stocks (for demonstration)
-                if ($this->isKnownCorporateStock($symbol)) {
-                    error_log("Using mock data for known corporate stock {$symbol}");
-                    return $this->getMockFinancialData($symbol);
-                } else {
-                    error_log("No financial data available for {$symbol} - likely ETF or non-corporate security");
-                    return []; // Return empty for ETFs and other non-corporate securities
-                }
+                error_log("FMP API returned empty financial data for {$symbol} - no data available");
+                return [];
             }
 
             error_log("Successfully fetched real financial data for {$symbol} from FMP API");
@@ -501,84 +493,14 @@ class DividendSafetyService
         } catch (Exception $e) {
             error_log("Error fetching financial data for {$symbol}: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
-
-            // Only use mock data for known corporate stocks
-            if ($this->isKnownCorporateStock($symbol)) {
-                return $this->getMockFinancialData($symbol);
-            } else {
-                return []; // Return empty for unknown securities
-            }
+            return []; // Return empty on error, no mock data
         }
     }
 
-    /**
-     * Get mock financial data for demonstration
-     */
-    private function getMockFinancialData(string $symbol): array
-    {
-        // Mock data based on typical large-cap dividend stocks
-        $mockData = [
-            'AAPL' => [
-                'eps' => 6.05,
-                'freeCashFlow' => 99584000000,
-                'totalDebt' => 123930000000,
-                'totalStockholdersEquity' => 59278000000,
-                'netIncome' => 94321000000,
-                'dividendsPaid' => -14467000000
-            ],
-            'MSFT' => [
-                'eps' => 9.65,
-                'freeCashFlow' => 65149000000,
-                'totalDebt' => 47032000000,
-                'totalStockholdersEquity' => 206223000000,
-                'netIncome' => 72361000000,
-                'dividendsPaid' => -18135000000
-            ],
-            'JNJ' => [
-                'eps' => 6.04,
-                'freeCashFlow' => 18910000000,
-                'totalDebt' => 31895000000,
-                'totalStockholdersEquity' => 71892000000,
-                'netIncome' => 15895000000,
-                'dividendsPaid' => -11156000000
-            ]
-        ];
 
-        $data = $mockData[$symbol] ?? $mockData['AAPL']; // Default to AAPL if symbol not found
-
-        return [
-            'income_statements' => [
-                [
-                    'eps' => $data['eps'],
-                    'netIncome' => $data['netIncome']
-                ],
-                [
-                    'eps' => $data['eps'] * 0.95,
-                    'netIncome' => $data['netIncome'] * 0.95
-                ],
-                [
-                    'eps' => $data['eps'] * 0.90,
-                    'netIncome' => $data['netIncome'] * 0.90
-                ]
-            ],
-            'balance_sheets' => [
-                [
-                    'totalDebt' => $data['totalDebt'],
-                    'totalStockholdersEquity' => $data['totalStockholdersEquity']
-                ]
-            ],
-            'cash_flow_statements' => [
-                [
-                    'freeCashFlow' => $data['freeCashFlow'],
-                    'dividendsPaid' => $data['dividendsPaid']
-                ]
-            ],
-            'key_metrics' => []
-        ];
-    }
     
     /**
-     * Get dividend history for analysis (with fallback to mock data)
+     * Get dividend history for analysis from database only
      */
     private function getDividendHistory(string $symbol): array
     {
@@ -590,43 +512,16 @@ class DividendSafetyService
 
         error_log("Dividend history for {$symbol}: found " . count($dividends) . " dividend records in database");
 
-        // If no dividend data found, use mock data for demonstration
         if (empty($dividends)) {
-            error_log("No dividend data found for {$symbol} in database - using mock data");
-            return $this->getMockDividendHistory($symbol);
-        }
-
-        error_log("Using real dividend data for {$symbol} from database");
-        return $dividends;
-    }
-
-    /**
-     * Get mock dividend history for demonstration
-     */
-    private function getMockDividendHistory(string $symbol): array
-    {
-        $mockDividends = [
-            'AAPL' => 0.24,  // Quarterly dividend
-            'MSFT' => 0.68,  // Quarterly dividend
-            'JNJ' => 1.13    // Quarterly dividend
-        ];
-
-        $quarterlyAmount = $mockDividends[$symbol] ?? 0.24;
-        $dividends = [];
-
-        // Generate 8 quarters of mock dividend data
-        for ($i = 0; $i < 8; $i++) {
-            $date = date('Y-m-d', strtotime("-{$i} months", strtotime('2024-12-15')));
-            $dividends[] = [
-                'symbol' => $symbol,
-                'ex_date' => $date,
-                'amount' => $quarterlyAmount,
-                'payment_date' => date('Y-m-d', strtotime('+30 days', strtotime($date)))
-            ];
+            error_log("No dividend data found for {$symbol} in database - cannot analyze without dividend history");
+        } else {
+            error_log("Using real dividend data for {$symbol} from database");
         }
 
         return $dividends;
     }
+
+
     
     /**
      * Calculate payout ratio
@@ -992,42 +887,7 @@ class DividendSafetyService
         return $recommendations;
     }
 
-    /**
-     * Check if financial data is mock data
-     */
-    private function isUsingMockFinancialData(array $financialData): bool
-    {
-        // Check if this looks like our mock data structure
-        if (empty($financialData['income_statements'])) {
-            return true;
-        }
 
-        $firstStatement = $financialData['income_statements'][0] ?? [];
-
-        // Check for specific mock data values we use
-        $mockEpsValues = [6.05, 9.65, 6.04]; // AAPL, MSFT, JNJ mock EPS
-        $eps = $firstStatement['eps'] ?? 0;
-
-        return in_array($eps, $mockEpsValues);
-    }
-
-    /**
-     * Check if dividend data is mock data
-     */
-    private function isUsingMockDividendData(array $dividendData): bool
-    {
-        if (empty($dividendData)) {
-            return true;
-        }
-
-        // Check if all dividends have the same amount (characteristic of mock data)
-        $amounts = array_column($dividendData, 'amount');
-        $uniqueAmounts = array_unique($amounts);
-
-        // Mock data typically has the same amount for all quarters
-        // Real data would have varying amounts
-        return count($uniqueAmounts) <= 1;
-    }
 
     /**
      * Check if a symbol is an ETF or other non-corporate security
@@ -1071,87 +931,7 @@ class DividendSafetyService
         return false;
     }
 
-    /**
-     * Check if a symbol is a known corporate stock (for mock data purposes)
-     */
-    private function isKnownCorporateStock(string $symbol): bool
-    {
-        $knownCorporateStocks = [
-            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK.B',
-            'JNJ', 'V', 'WMT', 'JPM', 'PG', 'UNH', 'HD', 'MA', 'DIS', 'PYPL',
-            'BAC', 'NFLX', 'ADBE', 'CRM', 'CMCSA', 'XOM', 'ABT', 'VZ', 'KO',
-            'PFE', 'NKE', 'T', 'INTC', 'MRK', 'CVX', 'WFC', 'TMO', 'CSCO',
-            'PEP', 'ABBV', 'ACN', 'LLY', 'AVGO', 'DHR', 'TXN', 'NEE', 'BMY',
-            'QCOM', 'PM', 'HON', 'UNP', 'IBM', 'LOW', 'LIN', 'AMGN', 'SPGI',
-            'CAT', 'GS', 'SBUX', 'BLK', 'AXP', 'GILD', 'CVS', 'MDT', 'BA',
-            'ISRG', 'BKNG', 'DE', 'AMD', 'TJX', 'AMT', 'MO', 'SYK', 'ADP',
-            'ZTS', 'LRCX', 'MMM', 'TMUS', 'CI', 'SO', 'DUK', 'PLD', 'CL',
-            'MDLZ', 'REGN', 'CB', 'EOG', 'ITW', 'CSX', 'USB', 'NSC', 'AON'
-        ];
 
-        return in_array(strtoupper($symbol), $knownCorporateStocks);
-    }
 
-    /**
-     * Get mock portfolio analysis for demonstration
-     */
-    private function getMockPortfolioAnalysis(): array
-    {
-        return [
-            'overall_score' => 75,
-            'overall_grade' => 'B',
-            'total_dividend_income' => 2450.00,
-            'safe_dividend_income' => 1680.00,
-            'at_risk_dividend_income' => 770.00,
-            'holdings_analysis' => [
-                'AAPL' => [
-                    'safety_score' => 68,
-                    'safety_grade' => 'C',
-                    'holding_value' => 15000.00,
-                    'annual_dividend' => 360.00,
-                    'warnings' => ['High debt ratio may impact dividend sustainability']
-                ],
-                'MSFT' => [
-                    'safety_score' => 83,
-                    'safety_grade' => 'A',
-                    'holding_value' => 12000.00,
-                    'annual_dividend' => 816.00,
-                    'warnings' => []
-                ],
-                'JNJ' => [
-                    'safety_score' => 89,
-                    'safety_grade' => 'A',
-                    'holding_value' => 10000.00,
-                    'annual_dividend' => 904.00,
-                    'warnings' => []
-                ],
-                'T' => [
-                    'safety_score' => 45,
-                    'safety_grade' => 'D',
-                    'holding_value' => 8000.00,
-                    'annual_dividend' => 370.00,
-                    'warnings' => ['High payout ratio', 'Declining earnings stability']
-                ]
-            ],
-            'risk_distribution' => [
-                'safe' => 2,      // MSFT, JNJ
-                'moderate' => 1,  // AAPL
-                'risky' => 0,
-                'dangerous' => 1  // T
-            ],
-            'top_risks' => [
-                [
-                    'symbol' => 'T',
-                    'score' => 45,
-                    'annual_dividend' => 370.00,
-                    'warnings' => ['High payout ratio', 'Declining earnings stability']
-                ]
-            ],
-            'recommendations' => [
-                'Consider reducing exposure to AT&T (T) due to low safety score',
-                'Portfolio has good diversification with 68% of dividend income from safe sources',
-                'Consider adding more dividend aristocrats to improve overall safety'
-            ]
-        ];
-    }
+
 }
