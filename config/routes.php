@@ -125,7 +125,6 @@ $app->group('/api/portfolios', function ($group) {
     $group->get('/{id:[0-9]+}/performance', [PortfolioController::class, 'getHistoricalPerformance']);
     $group->get('/{id:[0-9]+}/stocks/performance', [PortfolioController::class, 'getStockPerformance']);
     $group->get('/{id:[0-9]+}/events', [PortfolioController::class, 'getPortfolioEvents']);
-    $group->get('/{id:[0-9]+}/events', [PortfolioController::class, 'getPortfolioEvents']);
 })->add(AuthMiddleware::class);
 
 
