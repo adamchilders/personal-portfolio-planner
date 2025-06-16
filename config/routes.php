@@ -304,6 +304,9 @@ $app->group('/admin', function ($group) {
     });
 })->add(AdminMiddleware::class)->add(AuthMiddleware::class);
 
+// Test endpoint for dividend safety (no auth required)
+$app->get('/api/test-dividend-safety/{symbol:[A-Z0-9.-]+}', [PortfolioController::class, 'testDividendSafety']);
+
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {
     $data = [

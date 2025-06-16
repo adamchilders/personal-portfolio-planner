@@ -585,6 +585,38 @@ class PortfolioController
         }
     }
 
+    /**
+     * Test dividend safety endpoint (no auth required)
+     */
+    public function testDividendSafety(Request $request, Response $response, array $args): Response
+    {
+        $symbol = strtoupper($args['symbol']);
+
+        try {
+            $safetyData = $this->dividendSafetyService->calculateDividendSafetyScore($symbol);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'symbol' => $symbol,
+                'data' => $safetyData,
+                'test' => true,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            $response->getBody()->write(json_encode([
+                'success' => false,
+                'symbol' => $symbol,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'test' => true,
+                'timestamp' => date('Y-m-d H:i:s')
+            ]));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [

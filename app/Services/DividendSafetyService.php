@@ -107,7 +107,7 @@ class DividendSafetyService
             $maxScore += 15;
             
             // Calculate final score (0-100)
-            $finalScore = $maxScore > 0 ? round(($totalScore / $maxScore) * 100) : 0;
+            $finalScore = $maxScore > 0 ? (int)round(($totalScore / $maxScore) * 100) : 0;
             
             // Generate warnings
             $warnings = $this->generateWarnings($factors);
@@ -207,7 +207,7 @@ class DividendSafetyService
         }
         
         // Calculate overall portfolio score
-        $analysis['overall_score'] = $totalValue > 0 ? round($weightedScore / $totalValue) : 0;
+        $analysis['overall_score'] = $totalValue > 0 ? (int)round($weightedScore / $totalValue) : 0;
         $analysis['overall_grade'] = $this->getScoreGrade($analysis['overall_score']);
         
         // Sort top risks by dividend amount at risk
