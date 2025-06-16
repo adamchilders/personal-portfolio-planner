@@ -253,6 +253,18 @@ All API responses follow this format:
 }
 ```
 
+### DELETE /api/portfolios/{id}/holdings/{symbol}
+**Purpose**: Delete all transactions for a specific stock from a portfolio (removes the holding)
+**Authentication**: Required
+**Response**:
+```json
+{
+  "success": true,
+  "message": "All AAPL trades deleted successfully",
+  "transactions_deleted": 5
+}
+```
+
 ---
 
 ## Transaction Endpoints

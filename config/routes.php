@@ -106,6 +106,7 @@ $app->group('/api/portfolios', function ($group) {
 
     // Portfolio holdings and transactions
     $group->post('/{id:[0-9]+}/holdings', [PortfolioController::class, 'addHolding']);
+    $group->delete('/{id:[0-9]+}/holdings/{symbol:[A-Z0-9.-]+}', [PortfolioController::class, 'deleteHolding']);
     $group->get('/{id:[0-9]+}/transactions', [PortfolioController::class, 'getTransactions']);
     $group->post('/{id:[0-9]+}/transactions', [PortfolioController::class, 'addTransaction']);
     $group->get('/{id:[0-9]+}/transactions/{transactionId:[0-9]+}', [PortfolioController::class, 'getTransaction']);

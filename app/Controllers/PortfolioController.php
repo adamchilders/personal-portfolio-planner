@@ -201,7 +201,51 @@ class PortfolioController
             return $this->errorResponse($response, $e->getMessage(), 400);
         }
     }
-    
+
+    /**
+     * Delete a holding from a portfolio (removes all transactions for that stock)
+     */
+    public function deleteHolding(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $symbol = strtoupper($args['symbol']);
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+
+            // Find the holding
+            $holding = $portfolio->holdings()
+                ->where('stock_symbol', $symbol)
+                ->where('is_active', true)
+                ->first();
+
+            if (!$holding) {
+                return $this->errorResponse($response, 'Holding not found', 404);
+            }
+
+            // Delete all transactions for this stock in this portfolio
+            $deletedCount = $portfolio->transactions()
+                ->where('stock_symbol', $symbol)
+                ->delete();
+
+            // Remove the holding
+            $this->portfolioService->removeHolding($holding);
+
+            $responseData = [
+                'success' => true,
+                'message' => "All {$symbol} trades deleted successfully",
+                'transactions_deleted' => $deletedCount
+            ];
+
+            $response->getBody()->write(json_encode($responseData));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
     /**
      * Get transactions for a portfolio
      */
