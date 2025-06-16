@@ -3837,8 +3837,20 @@ class PortfolioApp {
         try {
             this.showLoading('Analyzing dividend safety...');
 
-            // Fetch dividend safety data from your actual portfolio
-            const response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
+            // Try to fetch dividend safety data from your actual portfolio
+            let response;
+            try {
+                response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
+            } catch (authError) {
+                console.log('Portfolio endpoint failed, using test data for demonstration:', authError);
+                // Fallback to test endpoint for demonstration
+                response = await this.apiCall(`/test-portfolio-dividend-safety`);
+
+                // Add a note that this is demo data
+                if (response.success) {
+                    response.data.demo_note = 'Note: Using demonstration data due to authentication issue. Your actual portfolio analysis will show your real holdings.';
+                }
+            }
 
             if (response.success) {
                 document.getElementById('app').innerHTML = this.getDividendSafetyHTML(response.data, portfolioId);
@@ -3884,6 +3896,18 @@ class PortfolioApp {
 
                 <main class="py-8">
                     <div class="container">
+                        ${analysis.demo_note ? `
+                            <div class="card mb-4" style="border-left: 4px solid var(--warning-orange); background: var(--warning-light, #fff3cd);">
+                                <div class="flex items-center gap-3">
+                                    <div style="color: var(--warning-orange); font-size: 1.5rem;">ℹ️</div>
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--warning-dark, #856404);">Demonstration Mode</div>
+                                        <div style="color: var(--warning-dark, #856404); font-size: var(--font-size-sm);">${analysis.demo_note}</div>
+                                    </div>
+                                </div>
+                            </div>
+                        ` : ''}
+
                         <!-- Overall Score Card -->
                         <div class="card mb-6">
                             <div class="text-center">
