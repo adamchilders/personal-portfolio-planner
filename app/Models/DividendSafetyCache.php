@@ -10,9 +10,9 @@ use DateTime;
 
 class DividendSafetyCache extends Model
 {
-    protected static string $table = 'dividend_safety_cache';
+    protected $table = 'dividend_safety_cache';
     
-    protected array $fillable = [
+    protected $fillable = [
         'symbol',
         'safety_score',
         'safety_grade',
@@ -28,8 +28,8 @@ class DividendSafetyCache extends Model
         'earnings_stability',
         'warnings'
     ];
-    
-    protected array $casts = [
+
+    protected $casts = [
         'safety_score' => 'int',
         'payout_ratio_score' => 'int',
         'fcf_coverage_score' => 'int',

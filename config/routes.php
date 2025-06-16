@@ -309,6 +309,11 @@ $app->get('/api/test-dividend-safety/{symbol:[A-Z0-9.-]+}', [PortfolioController
 $app->get('/api/test-portfolio-dividend-safety', [PortfolioController::class, 'testPortfolioDividendSafety']);
 $app->get('/api/test-real-portfolio-dividend-safety/{id:[0-9]+}', [PortfolioController::class, 'testRealPortfolioDividendSafety']);
 $app->get('/api/test-fmp-financial/{symbol:[A-Z0-9.-]+}', [PortfolioController::class, 'testFmpFinancialData']);
+$app->get('/api/test-simple', function ($request, $response) {
+    $response->getBody()->write(json_encode(['status' => 'ok', 'message' => 'Simple test works']));
+    return $response->withHeader('Content-Type', 'application/json');
+});
+$app->get('/api/test-dividend-service', [PortfolioController::class, 'testDividendSafetyService']);
 
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {

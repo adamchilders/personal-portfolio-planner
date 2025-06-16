@@ -197,7 +197,7 @@ class DividendSafetyService
         $dividendData = $this->getDividendHistory($symbol);
 
         // Check if this security has no financial statements (ETFs, REITs, etc.)
-        if (empty($financialData) && !$this->isKnownCorporateStock($symbol)) {
+        if (empty($financialData) && $this->isEtfOrNonCorporate($symbol)) {
             $safetyData = [
                 'score' => null,
                 'grade' => 'N/A',

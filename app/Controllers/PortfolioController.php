@@ -840,4 +840,36 @@ class PortfolioController
             return $this->errorResponse($response, $e->getMessage(), 500);
         }
     }
+
+    /**
+     * Simple test to check DividendSafetyService instantiation
+     */
+    public function testDividendSafetyService(Request $request, Response $response, array $args): Response
+    {
+        try {
+            $fmpService = new \App\Services\FinancialModelingPrepService();
+            $stockDataService = new \App\Services\StockDataService();
+            $service = new \App\Services\DividendSafetyService($fmpService, $stockDataService);
+            $diagnostics = $service->getDiagnosticInfo();
+
+            $result = [
+                'status' => 'ok',
+                'message' => 'DividendSafetyService instantiated successfully',
+                'diagnostics' => $diagnostics
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (Exception $e) {
+            $result = [
+                'status' => 'error',
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    }
 }

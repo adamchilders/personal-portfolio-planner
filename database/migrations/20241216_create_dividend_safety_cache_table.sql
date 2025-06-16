@@ -8,7 +8,7 @@ CREATE TABLE dividend_safety_cache (
     
     -- Safety Analysis Results
     safety_score INT NOT NULL DEFAULT 0,
-    safety_grade VARCHAR(2) NOT NULL DEFAULT 'N/A',
+    safety_grade VARCHAR(3) NOT NULL DEFAULT 'N/A',
     
     -- Individual Factor Scores (0-100)
     payout_ratio_score INT DEFAULT 0,
