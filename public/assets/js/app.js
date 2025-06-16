@@ -1191,15 +1191,13 @@ class PortfolioApp {
 
         if (portfolioId) {
             try {
-                // Fetch real historical data and events (use 60 days to ensure we capture first transaction)
-                const [performanceResponse, stockPerformanceResponse, eventsResponse] = await Promise.all([
+                // Fetch real historical data (temporarily disable events due to 500 error)
+                const [performanceResponse, stockPerformanceResponse] = await Promise.all([
                     this.apiCall(`/portfolios/${portfolioId}/performance?days=60`),
-                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`),
-                    this.apiCall(`/portfolios/${portfolioId}/events?days=60`).catch(error => {
-                        console.warn('Failed to load portfolio events:', error);
-                        return { success: true, events: [] }; // Fallback to empty events
-                    })
+                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`)
                 ]);
+                // Temporarily disable events until 500 error is resolved
+                const eventsResponse = { success: true, events: [] };
 
                 // Performance Chart - use real data if available
                 if (performanceResponse.success && performanceResponse.data) {
@@ -3279,7 +3277,10 @@ class PortfolioApp {
             </div>
 
             <div class="grid gap-4">
-                ${paymentHistory.map(payment => `
+                ${paymentHistory.map(payment => {
+                    // Debug logging for payment data
+                    console.log('Rendering payment:', payment.id, payment.stock_symbol, payment);
+                    return `
                     <div class="card" style="border-left: 4px solid var(--success-green);">
                         <div class="flex justify-between items-start">
                             <div class="flex-1">
@@ -3341,7 +3342,8 @@ class PortfolioApp {
                             </div>
                         </div>
                     </div>
-                `).join('')}
+                `;
+                }).join('')}
             </div>
         `;
     }

@@ -246,12 +246,17 @@ class DividendPaymentController extends BaseController
         $paymentId = (int)$args['paymentId'];
 
         try {
+            // Debug logging
+            error_log("DELETE request for payment ID: {$paymentId} in portfolio: {$portfolioId}");
+
             $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
 
             $payment = DividendPayment::where('portfolio_id', $portfolio->id)
                 ->where('id', $paymentId)
                 ->with('dividend')
                 ->firstOrFail();
+
+            error_log("Found payment: {$payment->id} for stock: {$payment->stock_symbol}");
 
             // Delete the payment and handle reversal
             $result = $this->dividendPaymentService->deleteDividendPayment($portfolio, $payment);
@@ -263,6 +268,7 @@ class DividendPaymentController extends BaseController
             ]);
 
         } catch (\Exception $e) {
+            error_log("Error deleting payment {$paymentId}: " . $e->getMessage());
             return $this->errorResponse($response, $e->getMessage(), 404);
         }
     }
