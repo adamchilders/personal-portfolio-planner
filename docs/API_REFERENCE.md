@@ -842,12 +842,50 @@ All API responses follow this format:
 ```
 
 ### PUT /api/portfolios/{id}/dividend-payments/{paymentId}
-**Purpose**: Update dividend payment notes
+**Purpose**: Update dividend payment details
 **Authentication**: Required
+**Request Body**:
+```json
+{
+  "payment_type": "drip",
+  "shares_owned": 100,
+  "total_dividend_amount": 26.00,
+  "drip_shares_purchased": 0.144,
+  "drip_price_per_share": 180.50,
+  "notes": "Updated dividend payment"
+}
+```
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Dividend payment updated successfully",
+  "payment": {
+    "id": 1,
+    "stock_symbol": "AAPL",
+    "payment_type": "drip",
+    "total_amount": 26.00,
+    "payment_date": "2025-05-15",
+    "shares_owned": 100,
+    "drip_shares": 0.144,
+    "drip_price": 180.50,
+    "notes": "Updated dividend payment"
+  }
+}
+```
 
 ### DELETE /api/portfolios/{id}/dividend-payments/{paymentId}
-**Purpose**: Delete a dividend payment record
+**Purpose**: Delete a dividend payment record (returns to pending list if still holding shares)
 **Authentication**: Required
+**Response**:
+```json
+{
+  "success": true,
+  "message": "Dividend payment deleted successfully",
+  "returned_to_pending": true,
+  "stock_symbol": "AAPL"
+}
+```
 
 ---
 

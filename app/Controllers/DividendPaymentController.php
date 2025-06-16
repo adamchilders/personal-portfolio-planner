@@ -204,29 +204,35 @@ class DividendPaymentController extends BaseController
         $portfolioId = (int)$args['id'];
         $paymentId = (int)$args['paymentId'];
         $data = $request->getParsedBody();
-        
+
         try {
             $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
-            
+
             $payment = DividendPayment::where('portfolio_id', $portfolio->id)
                 ->where('id', $paymentId)
+                ->with('dividend')
                 ->firstOrFail();
-            
-            // Only allow updating notes for now
-            $payment->update([
-                'notes' => $data['notes'] ?? $payment->notes
-            ]);
-            
+
+            // Update the dividend payment using the service
+            $updatedPayment = $this->dividendPaymentService->updateDividendPayment($portfolio, $payment, $data);
+
             return $this->successResponse($response, [
                 'message' => 'Dividend payment updated successfully',
                 'payment' => [
-                    'id' => $payment->id,
-                    'notes' => $payment->notes
+                    'id' => $updatedPayment->id,
+                    'stock_symbol' => $updatedPayment->stock_symbol,
+                    'payment_type' => $updatedPayment->payment_type,
+                    'total_amount' => $updatedPayment->total_dividend_amount,
+                    'payment_date' => $updatedPayment->payment_date->format('Y-m-d'),
+                    'shares_owned' => $updatedPayment->shares_owned,
+                    'drip_shares' => $updatedPayment->drip_shares_purchased,
+                    'drip_price' => $updatedPayment->drip_price_per_share,
+                    'notes' => $updatedPayment->notes
                 ]
             ]);
-            
+
         } catch (\Exception $e) {
-            return $this->errorResponse($response, $e->getMessage(), 404);
+            return $this->errorResponse($response, $e->getMessage(), 400);
         }
     }
     
@@ -238,21 +244,24 @@ class DividendPaymentController extends BaseController
         $user = $request->getAttribute('user');
         $portfolioId = (int)$args['id'];
         $paymentId = (int)$args['paymentId'];
-        
+
         try {
             $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
-            
+
             $payment = DividendPayment::where('portfolio_id', $portfolio->id)
                 ->where('id', $paymentId)
+                ->with('dividend')
                 ->firstOrFail();
-            
-            // TODO: Implement reversal of holdings and transaction changes
-            $payment->delete();
-            
+
+            // Delete the payment and handle reversal
+            $result = $this->dividendPaymentService->deleteDividendPayment($portfolio, $payment);
+
             return $this->successResponse($response, [
-                'message' => 'Dividend payment deleted successfully'
+                'message' => 'Dividend payment deleted successfully',
+                'returned_to_pending' => $result['returned_to_pending'],
+                'stock_symbol' => $payment->stock_symbol
             ]);
-            
+
         } catch (\Exception $e) {
             return $this->errorResponse($response, $e->getMessage(), 404);
         }

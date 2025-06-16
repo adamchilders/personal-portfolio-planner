@@ -96,6 +96,21 @@
         .tab-content.active {
             display: block;
         }
+
+        .btn-sm {
+            padding: var(--space-1) var(--space-2);
+            font-size: var(--font-size-sm);
+        }
+
+        .btn-danger {
+            background: var(--error-red);
+            color: white;
+            border: 1px solid var(--error-red);
+        }
+
+        .btn-danger:hover {
+            background: #dc2626;
+        }
     </style>
 </head>
 <body>
@@ -537,6 +552,15 @@
                                 <div style="font-size: var(--font-size-sm); color: var(--gray-600);">${payment.notes}</div>
                             </div>
                         ` : ''}
+
+                        <div class="flex justify-end gap-2 mt-3">
+                            <button onclick="dividendApp.editPayment(${payment.id})" class="btn btn-sm btn-outline">
+                                ✏️ Edit
+                            </button>
+                            <button onclick="dividendApp.deletePayment(${payment.id}, '${payment.stock_symbol}')" class="btn btn-sm btn-danger">
+                                🗑️ Delete
+                            </button>
+                        </div>
                     </div>
                 `).join('');
             }
@@ -614,7 +638,6 @@
                     const paymentType = document.querySelector('.payment-type-option.selected').dataset.type;
 
                     const paymentData = {
-                        dividend_id: this.currentPaymentData.dividend_id,
                         payment_date: document.getElementById('modal-payment-date').value,
                         shares_owned: parseFloat(document.getElementById('modal-shares-owned').value),
                         total_dividend_amount: parseFloat(document.getElementById('modal-total-amount').value),
@@ -627,17 +650,34 @@
                         paymentData.drip_price_per_share = parseFloat(document.getElementById('modal-drip-price').value);
                     }
 
-                    await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments`, 'POST', paymentData);
+                    let endpoint, method, successMessage;
+
+                    if (this.editingPaymentId) {
+                        // Update existing payment
+                        endpoint = `/portfolios/${this.currentPortfolio}/dividend-payments/${this.editingPaymentId}`;
+                        method = 'PUT';
+                        successMessage = 'Dividend payment updated successfully!';
+                    } else {
+                        // Create new payment
+                        paymentData.dividend_id = this.currentPaymentData.dividend_id;
+                        endpoint = `/portfolios/${this.currentPortfolio}/dividend-payments`;
+                        method = 'POST';
+                        successMessage = 'Dividend payment recorded successfully!';
+                    }
+
+                    await this.apiCall(endpoint, method, paymentData);
 
                     this.closeModal();
-                    this.showSuccess('Dividend payment recorded successfully!');
+                    this.showSuccess(successMessage);
 
                     // Reload data
                     await this.loadPendingPayments();
                     await this.loadPaymentHistory();
+                    await this.loadAnalytics();
 
                 } catch (error) {
-                    this.showError('Failed to record payment: ' + error.message);
+                    const action = this.editingPaymentId ? 'update' : 'record';
+                    this.showError(`Failed to ${action} payment: ` + error.message);
                 }
             }
 
@@ -769,8 +809,80 @@
                 }
             }
 
+            async editPayment(paymentId) {
+                try {
+                    // Find the payment in our history
+                    const payment = this.paymentHistory.find(p => p.id === paymentId);
+                    if (!payment) {
+                        this.showError('Payment not found');
+                        return;
+                    }
+
+                    // Populate edit modal with current values
+                    document.getElementById('modal-stock').value = `${payment.stock_symbol} - ${payment.stock_name}`;
+                    document.getElementById('modal-ex-date').value = new Date(payment.ex_date).toLocaleDateString();
+                    document.getElementById('modal-payment-date').value = payment.payment_date;
+                    document.getElementById('modal-shares-owned').value = payment.shares_owned;
+                    document.getElementById('modal-dividend-per-share').value = payment.dividend_per_share;
+                    document.getElementById('modal-total-amount').value = payment.total_amount.toFixed(2);
+                    document.getElementById('modal-notes').value = payment.notes || '';
+
+                    // Set payment type
+                    this.selectPaymentType(payment.payment_type);
+
+                    // Set DRIP fields if applicable
+                    if (payment.payment_type === 'drip') {
+                        document.getElementById('modal-drip-shares').value = payment.drip_shares_purchased;
+                        document.getElementById('modal-drip-price').value = payment.drip_price_per_share;
+                    }
+
+                    // Store payment data for update
+                    this.currentPaymentData = payment;
+                    this.editingPaymentId = paymentId;
+
+                    // Change modal title and button text
+                    document.querySelector('#recordPaymentModal h3').textContent = 'Edit Dividend Payment';
+                    document.querySelector('#recordPaymentModal .btn-primary').textContent = 'Update Payment';
+
+                    document.getElementById('recordPaymentModal').style.display = 'flex';
+
+                } catch (error) {
+                    this.showError('Failed to load payment for editing: ' + error.message);
+                }
+            }
+
+            async deletePayment(paymentId, stockSymbol) {
+                if (!confirm(`Are you sure you want to delete this dividend payment for ${stockSymbol}?\n\nIf you still hold shares, this dividend will return to the pending list.`)) {
+                    return;
+                }
+
+                try {
+                    const response = await this.apiCall(`/portfolios/${this.currentPortfolio}/dividend-payments/${paymentId}`, 'DELETE');
+
+                    let message = 'Dividend payment deleted successfully!';
+                    if (response.returned_to_pending) {
+                        message += ` The dividend for ${stockSymbol} has been returned to the pending list.`;
+                    }
+
+                    this.showSuccess(message);
+
+                    // Reload data
+                    await this.loadPendingPayments();
+                    await this.loadPaymentHistory();
+                    await this.loadAnalytics();
+
+                } catch (error) {
+                    this.showError('Failed to delete payment: ' + error.message);
+                }
+            }
+
             closeModal() {
                 document.getElementById('recordPaymentModal').style.display = 'none';
+
+                // Reset modal state
+                this.editingPaymentId = null;
+                document.querySelector('#recordPaymentModal h3').textContent = 'Record Dividend Payment';
+                document.querySelector('#recordPaymentModal .btn-primary').textContent = 'Record Payment';
             }
 
             async apiCall(endpoint, method = 'GET', data = null) {

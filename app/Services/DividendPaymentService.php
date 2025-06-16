@@ -504,4 +504,182 @@ class DividendPaymentService
 
         return $removedPayments;
     }
+
+    /**
+     * Update a dividend payment
+     */
+    public function updateDividendPayment(Portfolio $portfolio, DividendPayment $payment, array $updateData): DividendPayment
+    {
+        // Store original values for reversal if needed
+        $originalPaymentType = $payment->payment_type;
+        $originalAmount = $payment->total_dividend_amount;
+        $originalShares = $payment->shares_owned;
+        $originalDripShares = $payment->drip_shares_purchased;
+        $originalDripPrice = $payment->drip_price_per_share;
+
+        // Validate the update data
+        $allowedFields = ['payment_type', 'shares_owned', 'total_dividend_amount', 'drip_shares_purchased', 'drip_price_per_share', 'notes'];
+        $updateData = array_intersect_key($updateData, array_flip($allowedFields));
+
+        // If changing payment type or amounts, validate ownership
+        if (isset($updateData['shares_owned']) && $payment->dividend) {
+            $holding = $portfolio->holdings()
+                ->where('stock_symbol', $payment->stock_symbol)
+                ->where('is_active', true)
+                ->first();
+
+            if ($holding) {
+                $actualSharesOwned = $this->getSharesOwnedOnDate($holding, $payment->dividend->ex_date->format('Y-m-d'));
+                if ($updateData['shares_owned'] > $actualSharesOwned) {
+                    throw new Exception("Cannot update to {$updateData['shares_owned']} shares. You only owned {$actualSharesOwned} shares on the ex-dividend date");
+                }
+            }
+        }
+
+        // Validate DRIP fields if changing to DRIP
+        if (isset($updateData['payment_type']) && $updateData['payment_type'] === 'drip') {
+            if (!isset($updateData['drip_shares_purchased']) || !isset($updateData['drip_price_per_share'])) {
+                throw new Exception("DRIP payments require drip_shares_purchased and drip_price_per_share");
+            }
+        }
+
+        try {
+            // Reverse the original payment effects
+            $this->reversePaymentEffects($portfolio, $payment);
+
+            // Update the payment record
+            $payment->update($updateData);
+            $payment->refresh();
+
+            // Apply the new payment effects
+            $this->applyPaymentEffects($portfolio, $payment);
+
+            return $payment;
+
+        } catch (Exception $e) {
+            // If something goes wrong, try to restore original state
+            $payment->update([
+                'payment_type' => $originalPaymentType,
+                'total_dividend_amount' => $originalAmount,
+                'shares_owned' => $originalShares,
+                'drip_shares_purchased' => $originalDripShares,
+                'drip_price_per_share' => $originalDripPrice
+            ]);
+
+            throw $e;
+        }
+    }
+
+    /**
+     * Delete a dividend payment and return to pending if still holding shares
+     */
+    public function deleteDividendPayment(Portfolio $portfolio, DividendPayment $payment): array
+    {
+        $stockSymbol = $payment->stock_symbol;
+        $dividendId = $payment->dividend_id;
+
+        // Reverse the payment effects on holdings
+        $this->reversePaymentEffects($portfolio, $payment);
+
+        // Delete associated transactions
+        Transaction::where('portfolio_id', $portfolio->id)
+            ->where('stock_symbol', $payment->stock_symbol)
+            ->where('transaction_type', 'dividend')
+            ->where('transaction_date', $payment->payment_date)
+            ->delete();
+
+        // Delete the payment
+        $payment->delete();
+
+        // Check if this dividend should return to pending list
+        $returnedToPending = false;
+        $holding = $portfolio->holdings()
+            ->where('stock_symbol', $stockSymbol)
+            ->where('is_active', true)
+            ->first();
+
+        if ($holding && $payment->dividend) {
+            // Check if user still owns shares on ex-dividend date
+            $sharesOnExDate = $this->getSharesOwnedOnDate($holding, $payment->dividend->ex_date->format('Y-m-d'));
+            if ($sharesOnExDate > 0) {
+                $returnedToPending = true;
+            }
+        }
+
+        return [
+            'returned_to_pending' => $returnedToPending,
+            'stock_symbol' => $stockSymbol
+        ];
+    }
+
+    /**
+     * Reverse the effects of a dividend payment on holdings
+     */
+    private function reversePaymentEffects(Portfolio $portfolio, DividendPayment $payment): void
+    {
+        $holding = $portfolio->holdings()
+            ->where('stock_symbol', $payment->stock_symbol)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$holding) {
+            return; // No holding to reverse
+        }
+
+        if ($payment->isDrip() && $payment->drip_shares_purchased > 0) {
+            // Reverse DRIP: Remove shares and restore cost basis
+            $currentQuantity = $holding->quantity;
+            $currentTotalCost = $currentQuantity * $holding->avg_cost_basis;
+
+            // Remove DRIP shares
+            $newQuantity = $currentQuantity - $payment->drip_shares_purchased;
+
+            if ($newQuantity > 0) {
+                // Restore the cost basis by adding back the dividend amount
+                $newTotalCost = $currentTotalCost + $payment->total_dividend_amount;
+                $newAvgCostBasis = $newTotalCost / $newQuantity;
+
+                $holding->update([
+                    'quantity' => $newQuantity,
+                    'avg_cost_basis' => $newAvgCostBasis
+                ]);
+            } else {
+                // If no shares left, we need to handle this carefully
+                // This shouldn't happen in normal cases
+                $holding->update([
+                    'quantity' => 0,
+                    'avg_cost_basis' => 0
+                ]);
+            }
+        } else {
+            // Cash dividend: Restore cost basis
+            $currentQuantity = $holding->quantity;
+            $currentTotalCost = $currentQuantity * $holding->avg_cost_basis;
+            $newTotalCost = $currentTotalCost + $payment->total_dividend_amount;
+            $newAvgCostBasis = $currentQuantity > 0 ? $newTotalCost / $currentQuantity : 0;
+
+            $holding->update([
+                'avg_cost_basis' => $newAvgCostBasis
+            ]);
+        }
+    }
+
+    /**
+     * Apply the effects of a dividend payment on holdings
+     */
+    private function applyPaymentEffects(Portfolio $portfolio, DividendPayment $payment): void
+    {
+        $holding = $portfolio->holdings()
+            ->where('stock_symbol', $payment->stock_symbol)
+            ->where('is_active', true)
+            ->first();
+
+        if (!$holding) {
+            return; // No holding to apply effects to
+        }
+
+        // Apply the same logic as in the original recordDividendPayment
+        $this->updateHoldingForDividend($holding, $payment);
+        $this->createDividendTransaction($portfolio, $payment);
+    }
 }
