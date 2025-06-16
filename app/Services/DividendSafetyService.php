@@ -196,13 +196,31 @@ class DividendSafetyService
         $financialData = $this->getFinancialData($symbol);
         $dividendData = $this->getDividendHistory($symbol);
 
+        // Check if this security has no financial statements (ETFs, REITs, etc.)
+        if (empty($financialData) && !$this->isKnownCorporateStock($symbol)) {
+            $safetyData = [
+                'score' => null,
+                'grade' => 'N/A',
+                'factors' => [],
+                'warnings' => ['No financial statements available - likely ETF, REIT, or other non-corporate security'],
+                'last_updated' => date('Y-m-d H:i:s'),
+                'excluded_from_analysis' => true,
+                'exclusion_reason' => 'No corporate financial statements available'
+            ];
+
+            // Save to cache
+            DividendSafetyCache::updateSafetyData($symbol, $safetyData);
+            return $safetyData;
+        }
+
         if (empty($financialData) || empty($dividendData)) {
             $safetyData = [
                 'score' => 0,
                 'grade' => 'N/A',
                 'factors' => [],
                 'warnings' => ['Insufficient data for analysis'],
-                'last_updated' => date('Y-m-d H:i:s')
+                'last_updated' => date('Y-m-d H:i:s'),
+                'excluded_from_analysis' => false
             ];
 
             // Save to cache even if no data
@@ -341,49 +359,66 @@ class DividendSafetyService
         // Bulk update any stale safety data
         $this->bulkUpdateSafetyData($symbols);
 
+        $excludedHoldings = [];
+        $analyzedHoldings = [];
+
         foreach ($holdings as $holding) {
             try {
                 $safetyData = $this->calculateDividendSafetyScore($holding->stock_symbol);
                 $holdingValue = (float)$holding->quantity * (float)$holding->avg_cost_basis;
                 $annualDividend = $this->estimateAnnualDividend($holding->stock_symbol, (float)$holding->quantity);
-            
-            $analysis['holdings_analysis'][$holding->stock_symbol] = [
-                'safety_score' => $safetyData['score'],
-                'safety_grade' => $safetyData['grade'],
-                'holding_value' => $holdingValue,
-                'annual_dividend' => $annualDividend,
-                'warnings' => $safetyData['warnings']
-            ];
-            
-            // Weight by holding value
-            $weightedScore += $safetyData['score'] * $holdingValue;
-            $totalValue += $holdingValue;
-            
-            // Categorize dividend income by safety
-            $analysis['total_dividend_income'] += $annualDividend;
-            
-            if ($safetyData['score'] >= 70) {
-                $analysis['safe_dividend_income'] += $annualDividend;
-                $analysis['risk_distribution']['safe']++;
-            } elseif ($safetyData['score'] >= 50) {
-                $analysis['risk_distribution']['moderate']++;
-            } elseif ($safetyData['score'] >= 30) {
-                $analysis['at_risk_dividend_income'] += $annualDividend;
-                $analysis['risk_distribution']['risky']++;
-            } else {
-                $analysis['at_risk_dividend_income'] += $annualDividend;
-                $analysis['risk_distribution']['dangerous']++;
-            }
-            
-            // Track high-risk holdings
-            if ($safetyData['score'] < 50) {
-                $analysis['top_risks'][] = [
-                    'symbol' => $holding->stock_symbol,
-                    'score' => $safetyData['score'],
+
+                $holdingAnalysis = [
+                    'safety_score' => $safetyData['score'],
+                    'safety_grade' => $safetyData['grade'],
+                    'holding_value' => $holdingValue,
                     'annual_dividend' => $annualDividend,
                     'warnings' => $safetyData['warnings']
                 ];
-            }
+
+                // Check if this holding should be excluded from safety analysis
+                if (isset($safetyData['excluded_from_analysis']) && $safetyData['excluded_from_analysis']) {
+                    $holdingAnalysis['excluded_from_analysis'] = true;
+                    $holdingAnalysis['exclusion_reason'] = $safetyData['exclusion_reason'] ?? 'No financial data available';
+                    $excludedHoldings[$holding->stock_symbol] = $holdingAnalysis;
+                    continue; // Skip this holding from safety calculations
+                }
+
+                $analysis['holdings_analysis'][$holding->stock_symbol] = $holdingAnalysis;
+                $analyzedHoldings[] = $holding->stock_symbol;
+
+                // Only include in calculations if we have a valid score
+                if ($safetyData['score'] !== null && $safetyData['score'] > 0) {
+                    // Weight by holding value
+                    $weightedScore += $safetyData['score'] * $holdingValue;
+                    $totalValue += $holdingValue;
+                }
+
+                // Categorize dividend income by safety
+                $analysis['total_dividend_income'] += $annualDividend;
+
+                if ($safetyData['score'] >= 70) {
+                    $analysis['safe_dividend_income'] += $annualDividend;
+                    $analysis['risk_distribution']['safe']++;
+                } elseif ($safetyData['score'] >= 50) {
+                    $analysis['risk_distribution']['moderate']++;
+                } elseif ($safetyData['score'] >= 30) {
+                    $analysis['at_risk_dividend_income'] += $annualDividend;
+                    $analysis['risk_distribution']['risky']++;
+                } else {
+                    $analysis['at_risk_dividend_income'] += $annualDividend;
+                    $analysis['risk_distribution']['dangerous']++;
+                }
+
+                // Track high-risk holdings
+                if ($safetyData['score'] < 50 && $safetyData['score'] > 0) {
+                    $analysis['top_risks'][] = [
+                        'symbol' => $holding->stock_symbol,
+                        'score' => $safetyData['score'],
+                        'annual_dividend' => $annualDividend,
+                        'warnings' => $safetyData['warnings']
+                    ];
+                }
             } catch (Exception $e) {
                 error_log("Error analyzing holding {$holding->stock_symbol}: " . $e->getMessage());
                 // Add a placeholder entry for failed analysis
@@ -396,6 +431,11 @@ class DividendSafetyService
                 ];
             }
         }
+
+        // Add excluded holdings to the analysis
+        $analysis['excluded_holdings'] = $excludedHoldings;
+        $analysis['analyzed_holdings_count'] = count($analyzedHoldings);
+        $analysis['excluded_holdings_count'] = count($excludedHoldings);
         
         // Calculate overall portfolio score
         $analysis['overall_score'] = $totalValue > 0 ? (int)round($weightedScore / $totalValue) : 0;
@@ -417,6 +457,12 @@ class DividendSafetyService
      */
     private function getFinancialData(string $symbol): array
     {
+        // Check if this is an ETF or other security type that doesn't have financial statements
+        if ($this->isEtfOrNonCorporate($symbol)) {
+            error_log("Symbol {$symbol} appears to be an ETF or non-corporate security - skipping financial analysis");
+            return []; // Return empty data to indicate no financial statements available
+        }
+
         // Check if FMP is available first
         if (!$this->fmpService->isAvailable()) {
             error_log("FMP API not available for {$symbol} - using mock data");
@@ -436,10 +482,18 @@ class DividendSafetyService
                 'has_data' => !empty($data['income_statements']) || !empty($data['balance_sheets']) || !empty($data['cash_flow_statements'])
             ]));
 
-            // If we get empty data, use mock data for demonstration
+            // If we get empty data, check if it's a known corporate stock before using mock data
             if (empty($data['income_statements']) && empty($data['balance_sheets']) && empty($data['cash_flow_statements'])) {
-                error_log("FMP API returned empty financial data for {$symbol} - falling back to mock data");
-                return $this->getMockFinancialData($symbol);
+                error_log("FMP API returned empty financial data for {$symbol}");
+
+                // Only use mock data for known corporate stocks (for demonstration)
+                if ($this->isKnownCorporateStock($symbol)) {
+                    error_log("Using mock data for known corporate stock {$symbol}");
+                    return $this->getMockFinancialData($symbol);
+                } else {
+                    error_log("No financial data available for {$symbol} - likely ETF or non-corporate security");
+                    return []; // Return empty for ETFs and other non-corporate securities
+                }
             }
 
             error_log("Successfully fetched real financial data for {$symbol} from FMP API");
@@ -447,8 +501,13 @@ class DividendSafetyService
         } catch (Exception $e) {
             error_log("Error fetching financial data for {$symbol}: " . $e->getMessage());
             error_log("Stack trace: " . $e->getTraceAsString());
-            // Return mock data for demonstration purposes
-            return $this->getMockFinancialData($symbol);
+
+            // Only use mock data for known corporate stocks
+            if ($this->isKnownCorporateStock($symbol)) {
+                return $this->getMockFinancialData($symbol);
+            } else {
+                return []; // Return empty for unknown securities
+            }
         }
     }
 
@@ -968,6 +1027,69 @@ class DividendSafetyService
         // Mock data typically has the same amount for all quarters
         // Real data would have varying amounts
         return count($uniqueAmounts) <= 1;
+    }
+
+    /**
+     * Check if a symbol is an ETF or other non-corporate security
+     */
+    private function isEtfOrNonCorporate(string $symbol): bool
+    {
+        // Common ETF patterns and known ETFs
+        $etfPatterns = [
+            // Common ETF suffixes and patterns
+            '/^[A-Z]{2,4}$/',  // 2-4 letter symbols are often ETFs
+            '/^I[A-Z]{2}$/',   // iShares ETFs (IWM, IVV, etc.)
+            '/^SPY$/',         // SPDR S&P 500
+            '/^QQQ$/',         // Invesco QQQ
+            '/^VT[I|O]$/',     // Vanguard ETFs
+            '/^EFA$/',         // iShares MSCI EAFE
+            '/^EEM$/',         // iShares MSCI Emerging Markets
+        ];
+
+        // Known ETF symbols
+        $knownEtfs = [
+            'IWM', 'IVV', 'IWF', 'IWD', 'IWN', 'IWO', 'IWP', 'IWR', 'IWS', 'IWV',
+            'SPY', 'QQQ', 'VTI', 'VTO', 'EFA', 'EEM', 'GLD', 'SLV', 'TLT', 'HYG',
+            'LQD', 'VNQ', 'XLF', 'XLE', 'XLK', 'XLV', 'XLI', 'XLP', 'XLY', 'XLU',
+            'ARKK', 'ARKQ', 'ARKW', 'ARKG', 'ARKF'
+        ];
+
+        $symbol = strtoupper($symbol);
+
+        // Check against known ETFs
+        if (in_array($symbol, $knownEtfs)) {
+            return true;
+        }
+
+        // Check against patterns
+        foreach ($etfPatterns as $pattern) {
+            if (preg_match($pattern, $symbol)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if a symbol is a known corporate stock (for mock data purposes)
+     */
+    private function isKnownCorporateStock(string $symbol): bool
+    {
+        $knownCorporateStocks = [
+            'AAPL', 'MSFT', 'GOOGL', 'AMZN', 'TSLA', 'META', 'NVDA', 'BRK.B',
+            'JNJ', 'V', 'WMT', 'JPM', 'PG', 'UNH', 'HD', 'MA', 'DIS', 'PYPL',
+            'BAC', 'NFLX', 'ADBE', 'CRM', 'CMCSA', 'XOM', 'ABT', 'VZ', 'KO',
+            'PFE', 'NKE', 'T', 'INTC', 'MRK', 'CVX', 'WFC', 'TMO', 'CSCO',
+            'PEP', 'ABBV', 'ACN', 'LLY', 'AVGO', 'DHR', 'TXN', 'NEE', 'BMY',
+            'QCOM', 'PM', 'HON', 'UNP', 'IBM', 'LOW', 'LIN', 'AMGN', 'SPGI',
+            'CAT', 'GS', 'SBUX', 'BLK', 'AXP', 'GILD', 'CVS', 'MDT', 'BA',
+            'ISRG', 'BKNG', 'DE', 'AMD', 'TJX', 'AMT', 'MO', 'SYK', 'ADP',
+            'ZTS', 'LRCX', 'MMM', 'TMUS', 'CI', 'SO', 'DUK', 'PLD', 'CL',
+            'MDLZ', 'REGN', 'CB', 'EOG', 'ITW', 'CSX', 'USB', 'NSC', 'AON'
+        ];
+
+        return in_array(strtoupper($symbol), $knownCorporateStocks);
     }
 
     /**

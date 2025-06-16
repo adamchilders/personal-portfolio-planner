@@ -4145,6 +4145,15 @@ class PortfolioApp {
                                         </span>
                                         <span style="font-weight: 600;">${analysis.risk_distribution.dangerous} holdings</span>
                                     </div>
+                                    ${(analysis.excluded_holdings_count || 0) > 0 ? `
+                                    <div class="flex justify-between items-center" style="border-top: 1px solid var(--border-color); padding-top: var(--space-3); margin-top: var(--space-3);">
+                                        <span class="flex items-center gap-2">
+                                            <div style="width: 12px; height: 12px; background: var(--gray-400); border-radius: 50%;"></div>
+                                            Excluded from Analysis
+                                        </span>
+                                        <span style="font-weight: 600;">${analysis.excluded_holdings_count} holdings</span>
+                                    </div>
+                                    ` : ''}
                                 </div>
                             </div>
 
@@ -4167,6 +4176,35 @@ class PortfolioApp {
                                 `}
                             </div>
                         </div>
+
+                        <!-- Excluded Holdings (if any) -->
+                        ${(analysis.excluded_holdings && Object.keys(analysis.excluded_holdings).length > 0) ? `
+                        <div class="card mb-6">
+                            <h4 class="mb-4">📋 Holdings Excluded from Analysis</h4>
+                            <div class="space-y-3">
+                                ${Object.entries(analysis.excluded_holdings).map(([symbol, holding]) => `
+                                    <div class="flex justify-between items-center p-3" style="background: var(--gray-50); border-radius: 8px;">
+                                        <div class="flex items-center gap-3">
+                                            <div style="font-weight: 600; color: var(--gray-700);">${symbol}</div>
+                                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">
+                                                ${holding.exclusion_reason || 'No financial data available'}
+                                            </div>
+                                        </div>
+                                        <div class="text-right">
+                                            <div style="font-weight: 600; color: var(--gray-700);">$${holding.holding_value.toFixed(2)}</div>
+                                            <div style="font-size: var(--font-size-sm); color: var(--gray-600);">Portfolio Value</div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                            <div class="mt-4 p-3" style="background: var(--info-blue-light); border-radius: 8px; border-left: 4px solid var(--info-blue);">
+                                <div style="font-size: var(--font-size-sm); color: var(--info-blue-dark);">
+                                    <strong>Note:</strong> These holdings are excluded from dividend safety analysis because they don't have traditional corporate financial statements.
+                                    This typically includes ETFs, REITs, and other investment vehicles that don't operate as individual companies.
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
                     </div>
                 </main>
             </div>
