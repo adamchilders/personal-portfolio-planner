@@ -545,11 +545,20 @@ class PortfolioController
      */
     public function getDividendSafety(Request $request, Response $response, array $args): Response
     {
-        $user = $request->getAttribute('user');
-        $portfolioId = (int)$args['id'];
-
         try {
+            $user = $request->getAttribute('user');
+            $portfolioId = (int)$args['id'];
+
+            if (!$user) {
+                return $this->errorResponse($response, 'User not authenticated', 401);
+            }
+
             $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+
+            if (!$portfolio) {
+                return $this->errorResponse($response, 'Portfolio not found', 404);
+            }
+
             $safetyAnalysis = $this->dividendSafetyService->getPortfolioDividendSafety($portfolio);
 
             $response->getBody()->write(json_encode([
@@ -559,7 +568,8 @@ class PortfolioController
             return $response->withHeader('Content-Type', 'application/json');
 
         } catch (\Exception $e) {
-            return $this->errorResponse($response, $e->getMessage(), 400);
+            error_log("Dividend safety error: " . $e->getMessage() . "\n" . $e->getTraceAsString());
+            return $this->errorResponse($response, 'Internal server error: ' . $e->getMessage(), 500);
         }
     }
 
