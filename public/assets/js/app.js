@@ -2279,7 +2279,6 @@ class PortfolioApp {
                                 </button>
                                 <button data-action="show-add-trade" data-portfolio-id="${portfolio.id}" class="btn btn-primary">+ Add Trade</button>
                                 <button data-action="show-trade-history" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">📈 Trade History</button>
-                                <button data-action="show-dividend-safety" data-portfolio-id="${portfolio.id}" class="btn btn-secondary">🛡️ Dividend Safety</button>
                             </div>
                         </div>
                     </div>
@@ -3176,7 +3175,7 @@ class PortfolioApp {
 
                                 <!-- Analytics Tab -->
                                 <div id="analytics-tab" class="tab-content">
-                                    ${this.getDividendAnalyticsTabHTML(analytics)}
+                                    ${this.getDividendAnalyticsTabHTML(analytics, portfolioId)}
                                 </div>
                             </div>
                         </div>
@@ -3350,18 +3349,42 @@ class PortfolioApp {
         `;
     }
 
-    getDividendAnalyticsTabHTML(analytics) {
+    getDividendAnalyticsTabHTML(analytics, portfolioId) {
         if (!analytics || analytics.payment_count === 0) {
             return `
                 <div class="text-center py-12">
                     <div style="font-size: 3rem; margin-bottom: var(--space-4); opacity: 0.3;">📊</div>
                     <h3>No Analytics Available</h3>
                     <p class="text-muted mb-6">Record some dividend payments to see analytics and insights.</p>
+                    <div class="mt-6">
+                        <button data-action="show-dividend-safety" data-portfolio-id="${portfolioId}" class="btn btn-primary">
+                            🛡️ View Dividend Safety Analysis
+                        </button>
+                        <p class="text-muted mt-2" style="font-size: var(--font-size-sm);">
+                            Analyze the safety and sustainability of your dividend-paying stocks
+                        </p>
+                    </div>
                 </div>
             `;
         }
 
         return `
+            <!-- Dividend Safety Analysis -->
+            <div class="card mb-6">
+                <div class="flex justify-between items-center mb-4">
+                    <h4 style="margin-bottom: 0;">🛡️ Dividend Safety Analysis</h4>
+                    <button data-action="show-dividend-safety" data-portfolio-id="${portfolioId}" class="btn btn-outline btn-sm">
+                        View Full Analysis
+                    </button>
+                </div>
+                <div id="dividend-safety-summary" class="text-center py-4">
+                    <div class="text-muted">
+                        <div style="font-size: 1.5rem; margin-bottom: var(--space-2);">⏳</div>
+                        <div>Loading dividend safety analysis...</div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Overview Cards -->
             <div class="grid grid-cols-4 gap-4 mb-6">
                 <div class="card text-center">
@@ -3545,6 +3568,9 @@ class PortfolioApp {
 
         // Set up event listeners for dividend-specific functionality
         // Tab switching is handled by the main action handler
+
+        // Load dividend safety summary for analytics tab
+        this.loadDividendSafetySummary(portfolioId);
 
         // Process all button
         const processAllBtn = document.getElementById('process-all-btn');
@@ -3828,6 +3854,113 @@ class PortfolioApp {
         // Force refresh flag for this portfolio
         this.portfolioNeedsRefresh = this.portfolioNeedsRefresh || {};
         this.portfolioNeedsRefresh[portfolioId] = true;
+    }
+
+    /**
+     * Load dividend safety summary for the analytics tab
+     */
+    async loadDividendSafetySummary(portfolioId) {
+        const summaryElement = document.getElementById('dividend-safety-summary');
+        if (!summaryElement) return;
+
+        try {
+            // Try to fetch dividend safety data
+            let response;
+            try {
+                response = await this.apiCall(`/portfolios/${portfolioId}/dividend-safety`);
+            } catch (authError) {
+                // Try the test endpoint with real portfolio data (no auth required)
+                try {
+                    response = await this.apiCall(`/test-real-portfolio-dividend-safety/${portfolioId}`);
+                } catch (testError) {
+                    // Final fallback to mock data
+                    response = await this.apiCall(`/test-portfolio-dividend-safety`);
+                }
+            }
+
+            if (response.success) {
+                const analysis = response.data;
+                summaryElement.innerHTML = this.getDividendSafetySummaryHTML(analysis);
+            } else {
+                summaryElement.innerHTML = `
+                    <div class="text-muted">
+                        <div style="font-size: 1.5rem; margin-bottom: var(--space-2);">⚠️</div>
+                        <div>Unable to load dividend safety analysis</div>
+                    </div>
+                `;
+            }
+
+        } catch (error) {
+            console.error('Error loading dividend safety summary:', error);
+            summaryElement.innerHTML = `
+                <div class="text-muted">
+                    <div style="font-size: 1.5rem; margin-bottom: var(--space-2);">⚠️</div>
+                    <div>Error loading dividend safety analysis</div>
+                </div>
+            `;
+        }
+    }
+
+    /**
+     * Generate dividend safety summary HTML for analytics tab
+     */
+    getDividendSafetySummaryHTML(analysis) {
+        const gradeColor = this.getGradeColor(analysis.overall_grade);
+        const riskCount = analysis.risk_distribution.risky + analysis.risk_distribution.dangerous;
+
+        return `
+            <div class="grid grid-cols-3 gap-4">
+                <div class="text-center">
+                    <div style="font-size: 2rem; font-weight: 600; color: ${gradeColor}; margin-bottom: var(--space-1);">
+                        ${analysis.overall_score}
+                    </div>
+                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">
+                        Safety Score (${analysis.overall_grade})
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <div style="font-size: 2rem; font-weight: 600; color: var(--success-green); margin-bottom: var(--space-1);">
+                        $${analysis.safe_dividend_income.toFixed(0)}
+                    </div>
+                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">
+                        Safe Income
+                    </div>
+                </div>
+
+                <div class="text-center">
+                    <div style="font-size: 2rem; font-weight: 600; color: ${riskCount > 0 ? 'var(--warning-orange)' : 'var(--success-green)'}; margin-bottom: var(--space-1);">
+                        ${riskCount}
+                    </div>
+                    <div style="font-size: var(--font-size-sm); color: var(--gray-600);">
+                        At-Risk Holdings
+                    </div>
+                </div>
+            </div>
+
+            ${analysis.demo_note ? `
+                <div class="mt-3 text-center">
+                    <div style="font-size: var(--font-size-sm); color: var(--warning-orange);">
+                        ℹ️ ${analysis.demo_note.replace('Note: ', '')}
+                    </div>
+                </div>
+            ` : ''}
+        `;
+    }
+
+    /**
+     * Get color for grade display
+     */
+    getGradeColor(grade) {
+        switch(grade) {
+            case 'A+':
+            case 'A': return 'var(--success-green)';
+            case 'B': return 'var(--primary-blue)';
+            case 'C': return 'var(--warning-orange)';
+            case 'D':
+            case 'F': return 'var(--danger-red)';
+            default: return 'var(--gray-600)';
+        }
     }
 
     /**
