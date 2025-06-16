@@ -623,9 +623,14 @@ class PortfolioService
      */
     public function getPortfolioEvents(Portfolio $portfolio, int $days = 60): array
     {
-        $startDate = \App\Helpers\DateTimeHelper::now();
-        $startDate->modify("-{$days} days");
-        $events = [];
+        try {
+            $startDate = new \DateTime();
+            $startDate->modify("-{$days} days");
+            $events = [];
+        } catch (\Exception $e) {
+            error_log("Error creating start date in getPortfolioEvents: " . $e->getMessage());
+            return [];
+        }
 
         // Get transactions within the date range
         $transactions = $portfolio->transactions()
@@ -649,10 +654,15 @@ class PortfolioService
         }
 
         // Get dividend payments within the date range
-        $dividendPayments = DividendPayment::where('portfolio_id', $portfolio->id)
-            ->where('payment_date', '>=', $startDate->format('Y-m-d'))
-            ->orderBy('payment_date', 'asc')
-            ->get();
+        try {
+            $dividendPayments = DividendPayment::where('portfolio_id', $portfolio->id)
+                ->where('payment_date', '>=', $startDate->format('Y-m-d'))
+                ->orderBy('payment_date', 'asc')
+                ->get();
+        } catch (\Exception $e) {
+            error_log("Error fetching dividend payments in getPortfolioEvents: " . $e->getMessage());
+            $dividendPayments = collect(); // Empty collection
+        }
 
         foreach ($dividendPayments as $payment) {
             $events[] = [

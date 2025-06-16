@@ -1195,7 +1195,10 @@ class PortfolioApp {
                 const [performanceResponse, stockPerformanceResponse, eventsResponse] = await Promise.all([
                     this.apiCall(`/portfolios/${portfolioId}/performance?days=60`),
                     this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`),
-                    this.apiCall(`/portfolios/${portfolioId}/events?days=60`)
+                    this.apiCall(`/portfolios/${portfolioId}/events?days=60`).catch(error => {
+                        console.warn('Failed to load portfolio events:', error);
+                        return { success: true, events: [] }; // Fallback to empty events
+                    })
                 ]);
 
                 // Performance Chart - use real data if available
@@ -3324,12 +3327,16 @@ class PortfolioApp {
                                     ${new Date(payment.created_at).toLocaleDateString()}
                                 </div>
                                 <div class="flex gap-2 justify-end">
-                                    <button onclick="portfolioApp.editDividendPayment(${payment.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs);" ${!payment.id ? 'disabled' : ''}>
-                                        ✏️ Edit
-                                    </button>
-                                    <button onclick="portfolioApp.deleteDividendPayment(${payment.id}, '${payment.stock_symbol}')" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs); background: var(--error-red); color: white;" ${!payment.id ? 'disabled' : ''}>
-                                        🗑️ Delete
-                                    </button>
+                                    ${payment.id && payment.id > 0 ? `
+                                        <button onclick="portfolioApp.editDividendPayment(${payment.id})" class="btn btn-sm btn-outline" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs);">
+                                            ✏️ Edit
+                                        </button>
+                                        <button onclick="portfolioApp.deleteDividendPayment(${payment.id}, '${payment.stock_symbol}')" class="btn btn-sm" style="padding: 0.25rem 0.5rem; font-size: var(--font-size-xs); background: var(--error-red); color: white;">
+                                            🗑️ Delete
+                                        </button>
+                                    ` : `
+                                        <span class="text-muted" style="font-size: var(--font-size-xs);">Invalid payment data</span>
+                                    `}
                                 </div>
                             </div>
                         </div>
@@ -3752,11 +3759,19 @@ class PortfolioApp {
     }
 
     async deleteDividendPayment(paymentId, stockSymbol) {
+        // Validate payment ID
+        if (!paymentId || paymentId <= 0) {
+            this.showError('Invalid payment ID');
+            return;
+        }
+
         if (!confirm(`Are you sure you want to delete this dividend payment for ${stockSymbol}?\n\nIf you still hold shares, this dividend will return to the pending list.`)) {
             return;
         }
 
         try {
+            this.showLoading('Deleting dividend payment...');
+
             const response = await this.apiCall(`/portfolios/${this.currentDividendPortfolio}/dividend-payments/${paymentId}`, 'DELETE');
 
             let message = 'Dividend payment deleted successfully!';
@@ -3774,6 +3789,7 @@ class PortfolioApp {
 
         } catch (error) {
             this.showError('Failed to delete payment: ' + error.message);
+            console.error('Delete payment error:', error);
         }
     }
 
