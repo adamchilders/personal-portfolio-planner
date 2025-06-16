@@ -614,4 +614,88 @@ class PortfolioService
 
         return max(0, $totalQuantity); // Don't allow negative quantities
     }
+
+    /**
+     * Get portfolio events (transactions and dividend payments) for chart annotations
+     */
+    public function getPortfolioEvents(Portfolio $portfolio, int $days = 60): array
+    {
+        $startDate = \App\Helpers\DateTimeHelper::now()->modify("-{$days} days");
+        $events = [];
+
+        // Get transactions within the date range
+        $transactions = $portfolio->transactions()
+            ->where('transaction_date', '>=', $startDate->format('Y-m-d'))
+            ->orderBy('transaction_date', 'asc')
+            ->get();
+
+        foreach ($transactions as $transaction) {
+            $events[] = [
+                'type' => 'transaction',
+                'subtype' => $transaction->transaction_type,
+                'date' => $transaction->transaction_date->format('Y-m-d'),
+                'symbol' => $transaction->stock_symbol,
+                'quantity' => $transaction->quantity,
+                'price' => $transaction->price,
+                'amount' => $transaction->getTotalAmount(),
+                'description' => $this->getTransactionDescription($transaction),
+                'color' => $transaction->transaction_type === 'buy' ? '#10b981' : '#ef4444', // green for buy, red for sell
+                'icon' => $transaction->transaction_type === 'buy' ? '📈' : '📉'
+            ];
+        }
+
+        // Get dividend payments within the date range
+        $dividendPayments = \App\Models\DividendPayment::where('portfolio_id', $portfolio->id)
+            ->where('payment_date', '>=', $startDate->format('Y-m-d'))
+            ->orderBy('payment_date', 'asc')
+            ->get();
+
+        foreach ($dividendPayments as $payment) {
+            $events[] = [
+                'type' => 'dividend',
+                'subtype' => $payment->payment_type,
+                'date' => $payment->payment_date->format('Y-m-d'),
+                'symbol' => $payment->stock_symbol,
+                'amount' => $payment->total_dividend_amount,
+                'shares' => $payment->payment_type === 'drip' ? $payment->drip_shares_purchased : null,
+                'description' => $this->getDividendDescription($payment),
+                'color' => $payment->payment_type === 'drip' ? '#8b5cf6' : '#f59e0b', // purple for DRIP, orange for cash
+                'icon' => $payment->payment_type === 'drip' ? '🔄' : '💰'
+            ];
+        }
+
+        // Sort all events by date
+        usort($events, function($a, $b) {
+            return strtotime($a['date']) - strtotime($b['date']);
+        });
+
+        return $events;
+    }
+
+    /**
+     * Generate description for transaction events
+     */
+    private function getTransactionDescription(\App\Models\Transaction $transaction): string
+    {
+        $action = $transaction->transaction_type === 'buy' ? 'Bought' : 'Sold';
+        $shares = number_format($transaction->quantity, 0);
+        $price = number_format($transaction->price, 2);
+
+        return "{$action} {$shares} shares of {$transaction->stock_symbol} @ \${$price}";
+    }
+
+    /**
+     * Generate description for dividend events
+     */
+    private function getDividendDescription(\App\Models\DividendPayment $payment): string
+    {
+        $amount = number_format($payment->total_dividend_amount, 2);
+
+        if ($payment->payment_type === 'drip') {
+            $shares = number_format($payment->drip_shares_purchased, 3);
+            return "DRIP: \${$amount} → {$shares} shares of {$payment->stock_symbol}";
+        } else {
+            return "Cash dividend: \${$amount} from {$payment->stock_symbol}";
+        }
+    }
 }

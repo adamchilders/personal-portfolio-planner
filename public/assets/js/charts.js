@@ -124,13 +124,24 @@ class PortfolioCharts {
             }
         };
         
+        // Add event annotations if provided
+        if (options.events && options.events.length > 0) {
+            defaultOptions.plugins.annotation = this.createEventAnnotations(options.events, data.labels);
+        }
+
         const config = {
             type: 'line',
             data: data,
             options: { ...defaultOptions, ...options }
         };
-        
+
         this.charts[canvasId] = new Chart(ctx, config);
+
+        // Add event markers as overlays since Chart.js annotation plugin might not be available
+        if (options.events && options.events.length > 0) {
+            this.addEventMarkers(canvasId, options.events, data.labels);
+        }
+
         return this.charts[canvasId];
     }
     
@@ -409,7 +420,7 @@ class PortfolioCharts {
     }
 
     /**
-     * Create performance chart from real historical data
+     * Create performance chart from real historical data with events
      */
     createRealPerformanceChart(canvasId, historicalData, options = {}) {
         if (!historicalData || !historicalData.labels || historicalData.labels.length === 0) {
@@ -437,6 +448,11 @@ class PortfolioCharts {
                 }
             ]
         };
+
+        // Add events as annotations if provided
+        if (historicalData.events && historicalData.events.length > 0) {
+            options.events = historicalData.events;
+        }
 
         return this.createPerformanceChart(canvasId, data, options);
     }
@@ -500,6 +516,166 @@ class PortfolioCharts {
     destroyAllCharts() {
         Object.keys(this.charts).forEach(canvasId => {
             this.destroyChart(canvasId);
+        });
+    }
+
+    /**
+     * Create event annotations for Chart.js annotation plugin
+     */
+    createEventAnnotations(events, labels) {
+        const annotations = {};
+
+        events.forEach((event, index) => {
+            const labelIndex = labels.findIndex(label => {
+                const eventDate = new Date(event.date);
+                const labelDate = new Date(label);
+                return eventDate.toDateString() === labelDate.toDateString();
+            });
+
+            if (labelIndex !== -1) {
+                annotations[`event-${index}`] = {
+                    type: 'line',
+                    xMin: labelIndex,
+                    xMax: labelIndex,
+                    borderColor: event.color,
+                    borderWidth: 2,
+                    borderDash: [5, 5],
+                    label: {
+                        content: event.icon,
+                        enabled: true,
+                        position: 'top'
+                    }
+                };
+            }
+        });
+
+        return {
+            annotations: annotations
+        };
+    }
+
+    /**
+     * Add event markers as DOM overlays
+     */
+    addEventMarkers(canvasId, events, labels) {
+        const canvas = document.getElementById(canvasId);
+        if (!canvas) return;
+
+        // Remove existing markers
+        const existingMarkers = canvas.parentElement.querySelectorAll('.event-marker');
+        existingMarkers.forEach(marker => marker.remove());
+
+        // Create container for markers if it doesn't exist
+        let markerContainer = canvas.parentElement.querySelector('.event-markers');
+        if (!markerContainer) {
+            markerContainer = document.createElement('div');
+            markerContainer.className = 'event-markers';
+            markerContainer.style.cssText = `
+                position: absolute;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                pointer-events: none;
+                z-index: 10;
+            `;
+            canvas.parentElement.style.position = 'relative';
+            canvas.parentElement.appendChild(markerContainer);
+        }
+
+        // Add markers for each event
+        events.forEach((event, index) => {
+            const eventDate = new Date(event.date);
+            const labelIndex = labels.findIndex(label => {
+                // Parse label date (format: "Jan 15" or similar)
+                const currentYear = new Date().getFullYear();
+                const labelDate = new Date(`${label} ${currentYear}`);
+                return Math.abs(eventDate - labelDate) < 24 * 60 * 60 * 1000; // Within 1 day
+            });
+
+            if (labelIndex !== -1) {
+                const marker = document.createElement('div');
+                marker.className = 'event-marker';
+                marker.style.cssText = `
+                    position: absolute;
+                    width: 24px;
+                    height: 24px;
+                    background: ${event.color};
+                    border: 2px solid white;
+                    border-radius: 50%;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    font-size: 12px;
+                    cursor: pointer;
+                    pointer-events: auto;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    z-index: 20;
+                `;
+
+                marker.textContent = event.icon;
+                marker.title = event.description;
+
+                // Position the marker (approximate positioning)
+                const canvasRect = canvas.getBoundingClientRect();
+                const xPosition = (labelIndex / (labels.length - 1)) * canvasRect.width;
+                marker.style.left = `${xPosition - 12}px`;
+                marker.style.top = '10px';
+
+                // Add click handler for event details
+                marker.addEventListener('click', () => {
+                    this.showEventTooltip(event, marker);
+                });
+
+                markerContainer.appendChild(marker);
+            }
+        });
+    }
+
+    /**
+     * Show event tooltip
+     */
+    showEventTooltip(event, markerElement) {
+        // Remove existing tooltips
+        document.querySelectorAll('.event-tooltip').forEach(tooltip => tooltip.remove());
+
+        const tooltip = document.createElement('div');
+        tooltip.className = 'event-tooltip';
+        tooltip.style.cssText = `
+            position: absolute;
+            background: white;
+            border: 1px solid #e5e7eb;
+            border-radius: 8px;
+            padding: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 1000;
+            max-width: 250px;
+            font-size: 14px;
+            line-height: 1.4;
+        `;
+
+        tooltip.innerHTML = `
+            <div style="font-weight: 600; margin-bottom: 4px; color: ${event.color};">
+                ${event.icon} ${event.type.charAt(0).toUpperCase() + event.type.slice(1)}
+            </div>
+            <div style="margin-bottom: 4px;">${event.description}</div>
+            <div style="font-size: 12px; color: #6b7280;">${new Date(event.date).toLocaleDateString()}</div>
+        `;
+
+        // Position tooltip
+        const markerRect = markerElement.getBoundingClientRect();
+        tooltip.style.left = `${markerRect.left - 100}px`;
+        tooltip.style.top = `${markerRect.bottom + 5}px`;
+
+        document.body.appendChild(tooltip);
+
+        // Remove tooltip after 3 seconds or on click elsewhere
+        setTimeout(() => tooltip.remove(), 3000);
+        document.addEventListener('click', function removeTooltip(e) {
+            if (!tooltip.contains(e.target) && e.target !== markerElement) {
+                tooltip.remove();
+                document.removeEventListener('click', removeTooltip);
+            }
         });
     }
 }

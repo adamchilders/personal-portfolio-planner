@@ -205,6 +205,54 @@ All API responses follow this format:
 }
 ```
 
+### GET /api/portfolios/{id}/events
+**Purpose**: Get portfolio events (transactions and dividend payments) for chart annotations
+**Authentication**: Required
+**Query Parameters**:
+- `days` (optional): Number of days of historical data (default: 60)
+**Response**:
+```json
+{
+  "success": true,
+  "events": [
+    {
+      "type": "transaction",
+      "subtype": "buy",
+      "date": "2025-01-15",
+      "symbol": "AAPL",
+      "quantity": 100,
+      "price": 150.00,
+      "amount": 15009.99,
+      "description": "Bought 100 shares of AAPL @ $150.00",
+      "color": "#10b981",
+      "icon": "📈"
+    },
+    {
+      "type": "dividend",
+      "subtype": "cash",
+      "date": "2025-02-15",
+      "symbol": "AAPL",
+      "amount": 26.00,
+      "shares": null,
+      "description": "Cash dividend: $26.00 from AAPL",
+      "color": "#f59e0b",
+      "icon": "💰"
+    },
+    {
+      "type": "dividend",
+      "subtype": "drip",
+      "date": "2025-03-15",
+      "symbol": "MSFT",
+      "amount": 45.50,
+      "shares": 0.234,
+      "description": "DRIP: $45.50 → 0.234 shares of MSFT",
+      "color": "#8b5cf6",
+      "icon": "🔄"
+    }
+  ]
+}
+```
+
 ---
 
 ## Transaction Endpoints

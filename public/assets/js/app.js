@@ -945,15 +945,21 @@ class PortfolioApp {
         }
 
         try {
-            // Fetch real historical data
-            const [performanceResponse, stockPerformanceResponse] = await Promise.all([
+            // Fetch real historical data and events
+            const [performanceResponse, stockPerformanceResponse, eventsResponse] = await Promise.all([
                 this.apiCall(`/portfolios/${portfolioId}/performance?days=${days}`),
-                this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=${days}`)
+                this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=${days}`),
+                this.apiCall(`/portfolios/${portfolioId}/events?days=${days}`)
             ]);
 
             if (performanceResponse.success && performanceResponse.data) {
-                // Update performance chart with real data
-                window.portfolioCharts.createRealPerformanceChart('performanceChart', performanceResponse.data);
+                // Add events to the historical data
+                const historicalDataWithEvents = {
+                    ...performanceResponse.data,
+                    events: eventsResponse.success ? eventsResponse.events : []
+                };
+                // Update performance chart with real data and events
+                window.portfolioCharts.createRealPerformanceChart('performanceChart', historicalDataWithEvents);
             } else {
                 // Fallback to mock data
                 const performanceData = window.portfolioCharts.generateMockPerformanceData(days);
@@ -1179,15 +1185,21 @@ class PortfolioApp {
 
         if (portfolioId) {
             try {
-                // Fetch real historical data (use 60 days to ensure we capture first transaction)
-                const [performanceResponse, stockPerformanceResponse] = await Promise.all([
+                // Fetch real historical data and events (use 60 days to ensure we capture first transaction)
+                const [performanceResponse, stockPerformanceResponse, eventsResponse] = await Promise.all([
                     this.apiCall(`/portfolios/${portfolioId}/performance?days=60`),
-                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`)
+                    this.apiCall(`/portfolios/${portfolioId}/stocks/performance?days=60`),
+                    this.apiCall(`/portfolios/${portfolioId}/events?days=60`)
                 ]);
 
                 // Performance Chart - use real data if available
                 if (performanceResponse.success && performanceResponse.data) {
-                    window.portfolioCharts.createRealPerformanceChart('performanceChart', performanceResponse.data);
+                    // Add events to the historical data
+                    const historicalDataWithEvents = {
+                        ...performanceResponse.data,
+                        events: eventsResponse.success ? eventsResponse.events : []
+                    };
+                    window.portfolioCharts.createRealPerformanceChart('performanceChart', historicalDataWithEvents);
                 } else {
                     // Fallback to mock data
                     const performanceData = window.portfolioCharts.generateMockPerformanceData(30);

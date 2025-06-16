@@ -460,6 +460,30 @@ class PortfolioController
         }
     }
 
+    /**
+     * Get portfolio events (transactions and dividend payments) for chart annotations
+     */
+    public function getPortfolioEvents(Request $request, Response $response, array $args): Response
+    {
+        $user = $request->getAttribute('user');
+        $portfolioId = (int)$args['id'];
+        $days = (int) ($request->getQueryParams()['days'] ?? 60);
+
+        try {
+            $portfolio = $this->portfolioService->getPortfolio($portfolioId, $user);
+            $events = $this->portfolioService->getPortfolioEvents($portfolio, $days);
+
+            $response->getBody()->write(json_encode([
+                'success' => true,
+                'events' => $events
+            ]));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (\Exception $e) {
+            return $this->errorResponse($response, $e->getMessage(), 400);
+        }
+    }
+
     private function errorResponse(Response $response, string $message, int $status = 400): Response
     {
         $data = [
