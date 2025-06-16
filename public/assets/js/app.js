@@ -4120,6 +4120,9 @@ class PortfolioApp {
                             </div>
                         </div>
 
+                        <!-- Individual Holdings Analysis -->
+                        ${this.getHoldingsAnalysisHTML(analysis)}
+
                         <!-- Excluded Holdings (if any) -->
                         ${(analysis.excluded_holdings && Object.keys(analysis.excluded_holdings).length > 0) ? `
                         <div class="card mb-6">
@@ -4152,6 +4155,198 @@ class PortfolioApp {
                 </main>
             </div>
         `;
+    }
+
+    getHoldingsAnalysisHTML(analysis) {
+        if (!analysis.holdings_analysis || Object.keys(analysis.holdings_analysis).length === 0) {
+            return `
+                <div class="card mb-6">
+                    <h4 class="mb-4">📊 Individual Holdings Analysis</h4>
+                    <div class="text-center py-8" style="color: var(--gray-600);">
+                        <div style="font-size: 3rem; margin-bottom: 1rem;">📈</div>
+                        <div style="font-size: 1.1rem; margin-bottom: 0.5rem;">No Holdings to Analyze</div>
+                        <div style="font-size: var(--font-size-sm);">Add dividend-paying stocks to see detailed safety analysis</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        return `
+            <div class="card mb-6">
+                <h4 class="mb-4">📊 Individual Holdings Analysis</h4>
+                <div class="space-y-4">
+                    ${Object.entries(analysis.holdings_analysis).map(([symbol, holding]) =>
+                        this.getHoldingDetailHTML(symbol, holding)
+                    ).join('')}
+                </div>
+            </div>
+        `;
+    }
+
+    getHoldingDetailHTML(symbol, holding) {
+        const gradeColor = this.getGradeColor(holding.safety_grade);
+        const scoreColor = this.getScoreColor(holding.safety_score);
+
+        // Generate positives and negatives based on score and warnings
+        const positives = this.getHoldingPositives(holding);
+        const negatives = this.getHoldingNegatives(holding);
+        const recommendation = this.getHoldingRecommendation(symbol, holding);
+
+        return `
+            <div class="p-4" style="border: 1px solid var(--border-color); border-radius: 12px; background: var(--gray-50);">
+                <!-- Header -->
+                <div class="flex justify-between items-start mb-4">
+                    <div class="flex items-center gap-4">
+                        <div>
+                            <h5 style="margin: 0; font-size: 1.25rem; font-weight: 700; color: var(--gray-900);">${symbol}</h5>
+                            <div style="font-size: var(--font-size-sm); color: var(--gray-600); margin-top: 2px;">
+                                Portfolio Value: $${holding.holding_value.toFixed(2)} • Annual Dividend: $${holding.annual_dividend.toFixed(2)}
+                            </div>
+                        </div>
+                    </div>
+                    <div class="text-right">
+                        <div style="font-size: 2rem; font-weight: 700; color: ${scoreColor}; line-height: 1;">
+                            ${holding.safety_score || 'N/A'}
+                        </div>
+                        <div style="font-size: 1rem; font-weight: 600; color: ${gradeColor};">
+                            Grade: ${holding.safety_grade}
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analysis Details -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Positives -->
+                    ${positives.length > 0 ? `
+                    <div>
+                        <h6 style="margin: 0 0 8px 0; font-weight: 600; color: var(--success-green); display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.1rem;">✅</span> Strengths
+                        </h6>
+                        <ul style="margin: 0; padding-left: 0; list-style: none;">
+                            ${positives.map(positive => `
+                                <li style="font-size: var(--font-size-sm); color: var(--gray-700); margin-bottom: 4px; padding-left: 16px; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--success-green);">•</span>
+                                    ${positive}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    <!-- Negatives -->
+                    ${negatives.length > 0 ? `
+                    <div>
+                        <h6 style="margin: 0 0 8px 0; font-weight: 600; color: var(--error-red); display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.1rem;">⚠️</span> Concerns
+                        </h6>
+                        <ul style="margin: 0; padding-left: 0; list-style: none;">
+                            ${negatives.map(negative => `
+                                <li style="font-size: var(--font-size-sm); color: var(--gray-700); margin-bottom: 4px; padding-left: 16px; position: relative;">
+                                    <span style="position: absolute; left: 0; color: var(--error-red);">•</span>
+                                    ${negative}
+                                </li>
+                            `).join('')}
+                        </ul>
+                    </div>
+                    ` : ''}
+
+                    <!-- Recommendation -->
+                    ${recommendation ? `
+                    <div>
+                        <h6 style="margin: 0 0 8px 0; font-weight: 600; color: var(--info-blue); display: flex; align-items: center; gap: 6px;">
+                            <span style="font-size: 1.1rem;">💡</span> Recommendation
+                        </h6>
+                        <div style="font-size: var(--font-size-sm); color: var(--gray-700); line-height: 1.4;">
+                            ${recommendation}
+                        </div>
+                    </div>
+                    ` : ''}
+                </div>
+            </div>
+        `;
+    }
+
+    getHoldingPositives(holding) {
+        const positives = [];
+
+        if (holding.safety_score >= 80) {
+            positives.push('Excellent dividend safety score');
+        } else if (holding.safety_score >= 60) {
+            positives.push('Good dividend safety fundamentals');
+        }
+
+        if (holding.factors) {
+            if (holding.factors.payout_ratio_score >= 80) {
+                positives.push('Conservative payout ratio');
+            }
+            if (holding.factors.fcf_coverage_score >= 80) {
+                positives.push('Strong free cash flow coverage');
+            }
+            if (holding.factors.debt_ratio_score >= 80) {
+                positives.push('Low debt-to-equity ratio');
+            }
+            if (holding.factors.dividend_growth_score >= 80) {
+                positives.push('Consistent dividend growth');
+            }
+            if (holding.factors.earnings_stability_score >= 80) {
+                positives.push('Stable earnings history');
+            }
+        }
+
+        return positives;
+    }
+
+    getHoldingNegatives(holding) {
+        const negatives = [];
+
+        // Add warnings from the analysis
+        if (holding.warnings && holding.warnings.length > 0) {
+            negatives.push(...holding.warnings);
+        }
+
+        // Add specific concerns based on low factor scores
+        if (holding.factors) {
+            if (holding.factors.payout_ratio_score < 40) {
+                negatives.push('High payout ratio may be unsustainable');
+            }
+            if (holding.factors.fcf_coverage_score < 40) {
+                negatives.push('Insufficient free cash flow coverage');
+            }
+            if (holding.factors.debt_ratio_score < 40) {
+                negatives.push('High debt levels increase risk');
+            }
+            if (holding.factors.dividend_growth_score < 40) {
+                negatives.push('Inconsistent dividend growth pattern');
+            }
+            if (holding.factors.earnings_stability_score < 40) {
+                negatives.push('Volatile earnings history');
+            }
+        }
+
+        return negatives;
+    }
+
+    getHoldingRecommendation(symbol, holding) {
+        if (!holding.safety_score) {
+            return 'Unable to analyze - insufficient financial data available';
+        }
+
+        if (holding.safety_score >= 80) {
+            return `${symbol} appears to be a reliable dividend stock with strong fundamentals. Consider maintaining or increasing position.`;
+        } else if (holding.safety_score >= 60) {
+            return `${symbol} has decent dividend safety but monitor for any deteriorating fundamentals.`;
+        } else if (holding.safety_score >= 40) {
+            return `${symbol} shows concerning dividend safety metrics. Consider reducing exposure or monitoring closely.`;
+        } else {
+            return `${symbol} has poor dividend safety indicators. Consider selling or significantly reducing position size.`;
+        }
+    }
+
+    getScoreColor(score) {
+        if (score >= 80) return 'var(--success-green)';
+        if (score >= 60) return 'var(--primary-blue)';
+        if (score >= 40) return 'var(--warning-orange)';
+        return 'var(--error-red)';
     }
 
     /**
