@@ -315,6 +315,10 @@ $app->get('/api/test-simple', function ($request, $response) {
 });
 $app->get('/api/test-dividend-service', [PortfolioController::class, 'testDividendSafetyService']);
 
+// Cache management endpoints (no auth required for testing)
+$app->get('/api/portfolios/{id:[0-9]+}/cache-status', [PortfolioController::class, 'getCacheStatus']);
+$app->post('/api/portfolios/{id:[0-9]+}/refresh-cache', [PortfolioController::class, 'forceRefreshCache']);
+
 // Catch-all route for 404s
 $app->map(['GET', 'POST', 'PUT', 'DELETE', 'PATCH'], '/{routes:.+}', function (Request $request, Response $response) {
     $data = [

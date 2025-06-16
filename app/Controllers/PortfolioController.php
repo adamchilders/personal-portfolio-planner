@@ -872,4 +872,83 @@ class PortfolioController
             return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
         }
     }
+
+    /**
+     * Get cache status for portfolio symbols
+     */
+    public function getCacheStatus(Request $request, Response $response, array $args): Response
+    {
+        try {
+            $portfolioId = (int)$args['id'];
+            $portfolio = Portfolio::findOrFail($portfolioId);
+            $holdings = $portfolio->holdings()->where('is_active', true)->get();
+            $symbols = $holdings->pluck('stock_symbol')->unique()->toArray();
+
+            $fmpService = new \App\Services\FinancialModelingPrepService();
+            $stockDataService = new \App\Services\StockDataService();
+            $service = new \App\Services\DividendSafetyService($fmpService, $stockDataService);
+
+            $cacheStatus = $service->getCacheStatusForSymbols($symbols);
+            $cacheStats = $service->getCacheStats();
+
+            $result = [
+                'success' => true,
+                'portfolio_id' => $portfolioId,
+                'symbols' => $symbols,
+                'cache_status' => $cacheStatus,
+                'cache_stats' => $cacheStats
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (Exception $e) {
+            $result = [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    }
+
+    /**
+     * Force refresh cache for portfolio symbols
+     */
+    public function forceRefreshCache(Request $request, Response $response, array $args): Response
+    {
+        try {
+            $portfolioId = (int)$args['id'];
+            $portfolio = Portfolio::findOrFail($portfolioId);
+            $holdings = $portfolio->holdings()->where('is_active', true)->get();
+            $symbols = $holdings->pluck('stock_symbol')->unique()->toArray();
+
+            $fmpService = new \App\Services\FinancialModelingPrepService();
+            $stockDataService = new \App\Services\StockDataService();
+            $service = new \App\Services\DividendSafetyService($fmpService, $stockDataService);
+
+            $refreshResults = $service->forceRefreshCache($symbols);
+
+            $result = [
+                'success' => true,
+                'portfolio_id' => $portfolioId,
+                'symbols_refreshed' => array_keys($refreshResults),
+                'refresh_results' => $refreshResults,
+                'message' => 'Cache refreshed for ' . count($refreshResults) . ' symbols - benefits all portfolios'
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json');
+
+        } catch (Exception $e) {
+            $result = [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+
+            $response->getBody()->write(json_encode($result));
+            return $response->withHeader('Content-Type', 'application/json')->withStatus(500);
+        }
+    }
 }

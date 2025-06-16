@@ -11,6 +11,10 @@ use DateTime;
 class DividendSafetyCache extends Model
 {
     protected $table = 'dividend_safety_cache';
+
+    // Use custom timestamp column names to match our database schema
+    const UPDATED_AT = 'last_updated';
+    const CREATED_AT = 'created_at';
     
     protected $fillable = [
         'symbol',
@@ -55,25 +59,26 @@ class DividendSafetyCache extends Model
     }
     
     /**
-     * Check if cached data is fresh (updated within last 24 hours)
+     * Check if cached data is fresh (updated within last 72 hours)
+     * This allows sharing safety data across all portfolios for the same stock
      */
     public function isFresh(): bool
     {
         if (!$this->last_updated) {
             return false;
         }
-        
+
         $now = DateTimeHelper::now();
         $lastUpdated = $this->last_updated;
-        
-        // Consider fresh if updated within last 24 hours
+
+        // Consider fresh if updated within last 72 hours (3 days)
         $hoursSinceUpdate = ($now->getTimestamp() - $lastUpdated->getTimestamp()) / 3600;
-        
-        return $hoursSinceUpdate < 24;
+
+        return $hoursSinceUpdate < 72;
     }
     
     /**
-     * Check if data needs updating (older than 24 hours or score is 0)
+     * Check if data needs updating (older than 72 hours or score is 0)
      */
     public function needsUpdate(): bool
     {
@@ -174,9 +179,9 @@ class DividendSafetyCache extends Model
             $query->whereIn('symbol', array_map('strtoupper', $symbols));
         }
         
-        // Get records that are stale or have no score
+        // Get records that are stale (older than 72 hours) or have no score
         $staleRecords = $query->where(function($q) {
-            $q->where('last_updated', '<', DateTimeHelper::now()->modify('-24 hours'))
+            $q->where('last_updated', '<', DateTimeHelper::now()->modify('-72 hours'))
               ->orWhere('safety_score', 0);
         })->get();
         

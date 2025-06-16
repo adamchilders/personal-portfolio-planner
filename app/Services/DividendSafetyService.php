@@ -26,7 +26,8 @@ class DividendSafetyService
     
     /**
      * Calculate dividend safety score for a stock (0-100 scale)
-     * Uses cached data if available and fresh (< 24 hours old)
+     * Uses cached data if available and fresh (< 72 hours old)
+     * Data is shared across all portfolios for the same stock symbol
      */
     public function calculateDividendSafetyScore(string $symbol): array
     {
@@ -158,19 +159,29 @@ class DividendSafetyService
 
     /**
      * Bulk update dividend safety data for multiple symbols
-     * Only updates symbols that need refreshing (stale or missing data)
+     * Only updates symbols that need refreshing (older than 72 hours or missing data)
+     * Shared cache system - all portfolios benefit from updated data
      */
     public function bulkUpdateSafetyData(array $symbols): array
     {
         $symbols = array_map('strtoupper', $symbols);
         $symbolsNeedingUpdate = DividendSafetyCache::getSymbolsNeedingUpdate($symbols);
 
+        if (empty($symbolsNeedingUpdate)) {
+            error_log("Bulk update: All " . count($symbols) . " symbols have fresh cache data (< 72 hours old)");
+            return [];
+        }
+
+        error_log("Bulk update: Refreshing " . count($symbolsNeedingUpdate) . " symbols out of " . count($symbols) . " total symbols");
+
         $results = [];
         foreach ($symbolsNeedingUpdate as $symbol) {
             try {
+                error_log("Updating safety data for {$symbol} - shared across all portfolios");
                 // Force fresh calculation (bypass cache check)
                 $safetyData = $this->calculateFreshSafetyScore($symbol);
                 $results[$symbol] = $safetyData;
+                error_log("Successfully updated safety data for {$symbol} - score: {$safetyData['score']}");
             } catch (Exception $e) {
                 error_log("Error updating safety data for {$symbol}: " . $e->getMessage());
                 $results[$symbol] = [
@@ -183,6 +194,7 @@ class DividendSafetyService
             }
         }
 
+        error_log("Bulk update completed: Updated " . count($results) . " symbols");
         return $results;
     }
 
@@ -355,9 +367,13 @@ class DividendSafetyService
 
         // Get all symbols in portfolio
         $symbols = $holdings->pluck('stock_symbol')->unique()->toArray();
+        error_log("Portfolio analysis for portfolio {$portfolio->id}: analyzing " . count($symbols) . " unique symbols");
 
-        // Bulk update any stale safety data
-        $this->bulkUpdateSafetyData($symbols);
+        // Bulk update any stale safety data (shared across all portfolios)
+        $updatedSymbols = $this->bulkUpdateSafetyData($symbols);
+        if (!empty($updatedSymbols)) {
+            error_log("Portfolio analysis: Updated " . count($updatedSymbols) . " symbols that will benefit all portfolios");
+        }
 
         $excludedHoldings = [];
         $analyzedHoldings = [];
@@ -831,14 +847,16 @@ class DividendSafetyService
     public function getCacheStats(): array
     {
         $total = DividendSafetyCache::count();
-        $fresh = DividendSafetyCache::where('last_updated', '>=', date('Y-m-d H:i:s', strtotime('-24 hours')))->count();
+        $fresh = DividendSafetyCache::where('last_updated', '>=', date('Y-m-d H:i:s', strtotime('-72 hours')))->count();
         $stale = $total - $fresh;
 
         return [
             'total_cached' => $total,
             'fresh_entries' => $fresh,
             'stale_entries' => $stale,
-            'cache_hit_rate' => $total > 0 ? round(($fresh / $total) * 100, 1) : 0
+            'cache_hit_rate' => $total > 0 ? round(($fresh / $total) * 100, 1) : 0,
+            'cache_duration' => '72 hours',
+            'shared_across_portfolios' => true
         ];
     }
 
@@ -856,8 +874,9 @@ class DividendSafetyService
                 'stats' => $fmpStats
             ],
             'data_sources' => [
-                'financial_data' => $fmpAvailable ? 'FMP API' : 'Mock Data (Demo Mode)',
-                'dividend_data' => 'Database + FMP API fallback'
+                'financial_data' => $fmpAvailable ? 'FMP API' : 'Not Available',
+                'dividend_data' => 'Database',
+                'cache_system' => 'Shared across all portfolios (72-hour refresh)'
             ],
             'cache_stats' => $this->getCacheStats(),
             'recommendations' => $this->getDataSourceRecommendations($fmpAvailable)
@@ -874,14 +893,18 @@ class DividendSafetyService
         if (!$fmpAvailable) {
             $recommendations[] = 'Configure Financial Modeling Prep API key for real financial data';
             $recommendations[] = 'Visit Admin panel to add FMP API key';
-            $recommendations[] = 'Currently using demonstration data for safety analysis';
+            $recommendations[] = 'Safety analysis requires FMP API for financial statements';
         }
 
         $cacheStats = $this->getCacheStats();
         if ($cacheStats['total_cached'] === 0) {
-            $recommendations[] = 'No cached safety data - first analysis will be slower';
+            $recommendations[] = 'No cached safety data - first analysis will be slower but will benefit all portfolios';
         } elseif ($cacheStats['stale_entries'] > 0) {
-            $recommendations[] = "Update {$cacheStats['stale_entries']} stale cache entries for better performance";
+            $recommendations[] = "Update {$cacheStats['stale_entries']} stale cache entries (older than 72 hours) for better performance";
+        }
+
+        if ($cacheStats['fresh_entries'] > 0) {
+            $recommendations[] = "Cache system active: {$cacheStats['fresh_entries']} stocks have fresh data shared across all portfolios";
         }
 
         return $recommendations;
@@ -931,7 +954,71 @@ class DividendSafetyService
         return false;
     }
 
+    /**
+     * Force refresh cache for specific symbols (admin function)
+     * Useful for updating data immediately without waiting for 72-hour expiry
+     */
+    public function forceRefreshCache(array $symbols): array
+    {
+        $symbols = array_map('strtoupper', $symbols);
+        error_log("Force refresh requested for symbols: " . implode(', ', $symbols));
 
+        $results = [];
+        foreach ($symbols as $symbol) {
+            try {
+                // Force fresh calculation regardless of cache age
+                $safetyData = $this->calculateFreshSafetyScore($symbol);
+                $results[$symbol] = [
+                    'success' => true,
+                    'score' => $safetyData['score'],
+                    'grade' => $safetyData['grade'],
+                    'updated_at' => $safetyData['last_updated']
+                ];
+                error_log("Force refreshed {$symbol}: score {$safetyData['score']}");
+            } catch (Exception $e) {
+                error_log("Error force refreshing {$symbol}: " . $e->getMessage());
+                $results[$symbol] = [
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
 
+        return $results;
+    }
 
+    /**
+     * Get cache status for specific symbols
+     */
+    public function getCacheStatusForSymbols(array $symbols): array
+    {
+        $symbols = array_map('strtoupper', $symbols);
+        $results = [];
+
+        foreach ($symbols as $symbol) {
+            $cached = DividendSafetyCache::findBySymbol($symbol);
+            if ($cached) {
+                $results[$symbol] = [
+                    'cached' => true,
+                    'fresh' => $cached->isFresh(),
+                    'score' => $cached->safety_score,
+                    'grade' => $cached->safety_grade,
+                    'last_updated' => $cached->last_updated?->toISOString(),
+                    'age_hours' => $cached->last_updated ?
+                        round((time() - $cached->last_updated->getTimestamp()) / 3600, 1) : null
+                ];
+            } else {
+                $results[$symbol] = [
+                    'cached' => false,
+                    'fresh' => false,
+                    'score' => null,
+                    'grade' => null,
+                    'last_updated' => null,
+                    'age_hours' => null
+                ];
+            }
+        }
+
+        return $results;
+    }
 }
